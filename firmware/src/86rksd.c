@@ -38,13 +38,15 @@ uint8_t rom[128];
 * Для удобства                                                                 *
 *******************************************************************************/
 
+extern void RomEmu(void);
+
 void recvBin(uint8_t* d, WORD l) {
   for(; l; --l) {
     *d++ = wrecv();
   }  
 }
 
-void recvString() {
+void recvString(void) {
   uint8_t c;
   uint8_t* p = buf;       
   do {
@@ -58,10 +60,11 @@ void sendBin(uint8_t* p, WORD l) {
     send(*p++);
 }
 
-void sendBinf(PROGMEM uint8_t* d, uint8_t l) {
-  // todo: переделать на правильное получение данных из PROGMEM
-  //for(; l; --l)
-  //    send(*d++);
+void sendBinf(const char* d, uint8_t l) {
+  for(; l; --l) {
+      uint8_t x = pgm_read_byte(*d++);
+      send(x);
+  }
 }
 
 /*******************************************************************************
@@ -132,7 +135,7 @@ void readInt(char rks) {
 * Версия команд контроллера                                                    *
 *******************************************************************************/
 
-void cmd_ver() {
+void cmd_ver(void) {
   sendStart(1);
     
   // Версия + Производитель
@@ -145,9 +148,9 @@ void cmd_ver() {
 * BOOT / EXEC                                                                  *
 *******************************************************************************/
 
-void cmd_boot_exec() {
+void cmd_boot_exec(void) {
   // Файл по умолчанию
-  if(buf[0]==0) strcpy_P(buf, PSTR("boot/sdbios.rk"));
+  if(buf[0]==0) strcpy_P((char*)buf, PSTR("boot/sdbios.rk"));
 
   // Открываем файл
   if(fs_open()) return;
@@ -164,13 +167,13 @@ void cmd_boot_exec() {
   readInt(/*rks*/1);  
 }
 
-void cmd_boot() { 
+void cmd_boot(void) { 
   sendStart(ERR_WAIT);
   buf[0] = 0;
   cmd_boot_exec();  
 }
 
-void cmd_exec() {     
+void cmd_exec(void) {     
   // Прием имени файла
   recvString();
 
@@ -198,7 +201,7 @@ typedef struct {
     };
 } FILINFO2;
 
-void cmd_find() {
+void cmd_find(void) {
   WORD n;
   FILINFO2 info;              
   
@@ -247,7 +250,7 @@ void cmd_find() {
 * Открыть/создать файл/папку                                                   *
 *******************************************************************************/
 
-void cmd_open() {
+void cmd_open(void) {
   uint8_t mode;
  
   /* Принимаем режим */
@@ -283,7 +286,7 @@ void cmd_open() {
 * Переместить файл/папку                                                       *
 *******************************************************************************/
 
-void cmd_move() {
+void cmd_move(void) {
   recvString();
   sendStart(ERR_WAIT);
   fs_openany();
@@ -299,7 +302,7 @@ void cmd_move() {
 * Установить/прочитать указатель чтения                                        *
 *******************************************************************************/
 
-void cmd_lseek() {
+void cmd_lseek(void) {
   uint8_t mode;
   DWORD off;
 
@@ -340,7 +343,7 @@ void cmd_lseek() {
 * Прочитать из файла                                                           *
 *******************************************************************************/
 
-void cmd_read() {
+void cmd_read(void) {
   DWORD s;
 
   // Длина
@@ -366,7 +369,7 @@ void cmd_read() {
 * Записать данные в файл                                                       *
 *******************************************************************************/
 
-void cmd_write() {
+void cmd_write(void) {
   // Аргументы
   recvBin((uint8_t*)&fs_wtotal, 2); 
 
@@ -401,7 +404,7 @@ void cmd_write() {
 * Главная процедура                                                            *
 *******************************************************************************/
 
-void error() {
+void error(void) {
   for(;;) {
     PORTB |= _BV(PB0);
     _delay_ms(100);
@@ -410,8 +413,8 @@ void error() {
   }
 }
 
-int main() {
-  uint8_t c, d;
+int main(void) {
+  uint8_t c;
     
   DATA_OUT            // Шина данных (DDRD)
   DDRC  = 0b00000000; // Шина адреса
@@ -423,7 +426,7 @@ int main() {
 
   // Запуск файловой системы
   if(fs_init()) error();
-  strcpy_P(buf, PSTR("boot/boot.rk"));
+  strcpy_P((char*)buf, PSTR("boot/boot.rk"));
   if(fs_open()) error();
   if(fs_getfilesize()) error();
   if(fs_tmp < 7) error();

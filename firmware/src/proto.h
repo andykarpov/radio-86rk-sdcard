@@ -6,8 +6,8 @@
 #define DATA_OUT    DDRD = 0b11111111;
 #define DATA_IN     DDRD = 0b00000000;
 
-void wait();
+void wait(void);
 void sendStart(uint8_t c); 
 void send(uint8_t c);
-void recvStart();
-uint8_t wrecv();
+void recvStart(void);
+uint8_t wrecv(void);

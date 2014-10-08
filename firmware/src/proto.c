@@ -4,7 +4,7 @@
 #include <avr/io.h>
 #include "proto.h"
 
-void wait() {
+void wait(void) {
     // Ждем перепад 0->1
     while( !(PINC && (1 << PC5)) );
     while( PINC && (1 << PC5) ); 
@@ -20,18 +20,18 @@ void sendStart(uint8_t c) {
     PORTD = c;
 }
 
-void recvStart() {
+void recvStart(void) {
     wait();
     DATA_IN
     PORTD = 0xFF;
 } 
 
-uint8_t wrecv() {    
-    wait();   
+uint8_t wrecv(void) {
+    wait();
     return PIND;
 }
 
 void send(uint8_t c) {
-    wait();   
+    wait();
     PORTD = c;
 }

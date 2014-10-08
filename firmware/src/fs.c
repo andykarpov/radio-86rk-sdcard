@@ -667,10 +667,12 @@ abort:
   return 1;
 }
 
-static uint8_t exists(const PROGMEM uint8_t* str, uint8_t c) {
-  while(*str)   
-    if(*str++ == c) 
+static uint8_t exists(const char* str, uint8_t c) {
+  while (pgm_read_byte(str) != 0x00) {
+    uint8_t x = pgm_read_byte(str++);
+    if (x == c) 
       return c;
+  }
   return 0;
 }
 
@@ -698,7 +700,7 @@ static CONST uint8_t * fs_open0_name(CONST uint8_t *p) {
     if(i == ni) break;
     /* Запрещенные символы */
 #ifndef FS_DISABLE_CHECK    
-    if(exists((const PROGMEM uint8_t* )"+,;=[]*?<:>\\|\"", c)) break;
+    if(exists(PSTR("+,;=[]*?<:>\\|\""), c)) break;
     if(c <= 0x20) break;
     if(c >= 0x80) break;
 #endif    
@@ -713,7 +715,7 @@ static CONST uint8_t * fs_open0_name(CONST uint8_t *p) {
 
 static uint8_t fs_open0_create(uint8_t dir) {
   uint8_t  new_name[11];
-  unsigned long allocatedCluster;     
+  unsigned long allocatedCluster = 0;
   uint8_t* allocatedEntry;
 
   /* Сохраняем имя, так как весь буфер будет затерт */
