@@ -808,6 +808,12 @@ void cmd_inverseAll() {
 
 void main() {
   register uchar c;
+  char firstEnter = 1;
+  
+  // nop
+  //bioskey1();
+
+  while(bioskey1() != 0xFF);
 
   // Инициализация файловой системы (пока в регистрах нужные значения)
   fs_init();
@@ -854,6 +860,9 @@ void main() {
   // Бесконечный цикл обработки клавиш
   while(1) {
     c = getch1();
+
+    if(c==KEY_ENTER && firstEnter) continue;
+    firstEnter = 0;
 
     switch(c) {
       case KEY_F1:    cmd_freespace();         continue;
