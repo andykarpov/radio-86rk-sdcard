@@ -40,3 +40,13 @@
 Все остальное можно не трогать или по желанию (например параметры brown out detection).
 
 
+## Полезные ссылки
+- Обсуждение проекта на zx-pk.ru: [http://zx-pk.ru/showthread.php?t=24092](http://zx-pk.ru/showthread.php?t=24092)
+
+- Тема в барахолке на zx-pk.ru: [http://zx-pk.ru/market/viewtopic.php?f=7&t=2567&p=24381](http://zx-pk.ru/market/viewtopic.php?f=7&t=2567&p=24381)
+
+- Оригинальная авторская разработка: [http://vinxru.livejournal.com/235725.html](http://vinxru.livejournal.com/235725.html) 
+
+- Исходный код оригинальной авторской разработки: [http://github.com/vinxru/86RKSD](http://github.com/vinxru/86RKSD)
+
+- Группа автора в соц. сети Вконтакте с подробным описанием этапов разработки: [https://vk.com/retropk](https://vk.com/retropk)
