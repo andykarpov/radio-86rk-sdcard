@@ -1,0 +1,2244 @@
+   1               		.file	"86rksd.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	recvBin
+  12               	recvBin:
+  13               	.LFB7:
+  14               		.file 1 "86rksd.c"
+   1:86rksd.c      **** // SD Controller for Computer "Radio 86RK" / "Apogee BK01"
+   2:86rksd.c      **** // (c) 10-05-2014 vinxru (aleksey.f.morozov@gmail.com)
+   3:86rksd.c      **** // Ported to avr-gcc: <andy.karpov@gmail.com> at 07.10.2014
+   4:86rksd.c      **** 
+   5:86rksd.c      **** // уже определено в Makefile
+   6:86rksd.c      **** //#define F_CPU 8000000UL        //freq 8 MHz
+   7:86rksd.c      **** 
+   8:86rksd.c      **** #include <avr/io.h>
+   9:86rksd.c      **** #include <avr/pgmspace.h>
+  10:86rksd.c      **** #include <util/delay.h>
+  11:86rksd.c      **** #include <string.h>
+  12:86rksd.c      **** 
+  13:86rksd.c      **** #include "common.h"
+  14:86rksd.c      **** #include "sd.h"
+  15:86rksd.c      **** #include "fs.h"
+  16:86rksd.c      **** #include "proto.h"
+  17:86rksd.c      **** 
+  18:86rksd.c      **** #define O_OPEN   0
+  19:86rksd.c      **** #define O_CREATE 1
+  20:86rksd.c      **** #define O_MKDIR  2
+  21:86rksd.c      **** #define O_DELETE 100
+  22:86rksd.c      **** #define O_SWAP   101
+  23:86rksd.c      **** 
+  24:86rksd.c      **** #define ERR_START       0x40
+  25:86rksd.c      **** #define ERR_WAIT        0x41
+  26:86rksd.c      **** #define ERR_OK_DISK         0x42
+  27:86rksd.c      **** #define ERR_OK_CMD          0x43
+  28:86rksd.c      **** #define ERR_OK_READ         0x44
+  29:86rksd.c      **** #define ERR_OK_ENTRY        0x45
+  30:86rksd.c      **** #define ERR_OK_WRITE        0x46
+  31:86rksd.c      **** #define ERR_OK_RKS          0x47
+  32:86rksd.c      **** #define ERR_READ_BLOCK      0x4F
+  33:86rksd.c      **** 
+  34:86rksd.c      **** uint8_t buf[512];
+  35:86rksd.c      **** uint8_t rom[128];
+  36:86rksd.c      **** 
+  37:86rksd.c      **** /*******************************************************************************
+  38:86rksd.c      **** * Для удобства                                                                 *
+  39:86rksd.c      **** *******************************************************************************/
+  40:86rksd.c      **** 
+  41:86rksd.c      **** extern void RomEmu(void);
+  42:86rksd.c      **** 
+  43:86rksd.c      **** void recvBin(uint8_t* d, WORD l) {
+  15               		.loc 1 43 0
+  16               		.cfi_startproc
+  17               	.LVL0:
+  18 0000 0F93      		push r16
+  19               	.LCFI0:
+  20               		.cfi_def_cfa_offset 3
+  21               		.cfi_offset 16, -2
+  22 0002 1F93      		push r17
+  23               	.LCFI1:
+  24               		.cfi_def_cfa_offset 4
+  25               		.cfi_offset 17, -3
+  26 0004 CF93      		push r28
+  27               	.LCFI2:
+  28               		.cfi_def_cfa_offset 5
+  29               		.cfi_offset 28, -4
+  30 0006 DF93      		push r29
+  31               	.LCFI3:
+  32               		.cfi_def_cfa_offset 6
+  33               		.cfi_offset 29, -5
+  34               	/* prologue: function */
+  35               	/* frame size = 0 */
+  36               	/* stack size = 4 */
+  37               	.L__stack_usage = 4
+  38 0008 8B01      		movw r16,r22
+  39 000a EC01      		movw r28,r24
+  40 000c 080F      		add r16,r24
+  41 000e 191F      		adc r17,r25
+  42               	.LVL1:
+  43               	.L2:
+  44:86rksd.c      ****   for(; l; --l) {
+  44               		.loc 1 44 0 discriminator 1
+  45 0010 C017      		cp r28,r16
+  46 0012 D107      		cpc r29,r17
+  47 0014 01F0      		breq .L5
+  48               	.LVL2:
+  45:86rksd.c      ****     *d++ = wrecv();
+  49               		.loc 1 45 0 discriminator 2
+  50 0016 0E94 0000 		call wrecv
+  51               	.LVL3:
+  52 001a 8993      		st Y+,r24
+  53               	.LVL4:
+  54 001c 00C0      		rjmp .L2
+  55               	.L5:
+  56               	/* epilogue start */
+  46:86rksd.c      ****   }  
+  47:86rksd.c      **** }
+  57               		.loc 1 47 0
+  58 001e DF91      		pop r29
+  59 0020 CF91      		pop r28
+  60               	.LVL5:
+  61 0022 1F91      		pop r17
+  62 0024 0F91      		pop r16
+  63 0026 0895      		ret
+  64               		.cfi_endproc
+  65               	.LFE7:
+  67               	.global	recvString
+  69               	recvString:
+  70               	.LFB8:
+  48:86rksd.c      **** 
+  49:86rksd.c      **** void recvString(void) {
+  71               		.loc 1 49 0
+  72               		.cfi_startproc
+  73 0028 1F93      		push r17
+  74               	.LCFI4:
+  75               		.cfi_def_cfa_offset 3
+  76               		.cfi_offset 17, -2
+  77 002a CF93      		push r28
+  78               	.LCFI5:
+  79               		.cfi_def_cfa_offset 4
+  80               		.cfi_offset 28, -3
+  81 002c DF93      		push r29
+  82               	.LCFI6:
+  83               		.cfi_def_cfa_offset 5
+  84               		.cfi_offset 29, -4
+  85               	/* prologue: function */
+  86               	/* frame size = 0 */
+  87               	/* stack size = 3 */
+  88               	.L__stack_usage = 3
+  89               	.LVL6:
+  50:86rksd.c      ****   uint8_t c;
+  51:86rksd.c      ****   uint8_t* p = buf;       
+  90               		.loc 1 51 0
+  91 002e C0E0      		ldi r28,lo8(buf)
+  92 0030 D0E0      		ldi r29,hi8(buf)
+  52:86rksd.c      ****   do {
+  53:86rksd.c      ****     c = wrecv();
+  54:86rksd.c      ****     if(p != buf + FS_MAXFILE) *p++ = c; else lastError = ERR_RECV_STRING;
+  93               		.loc 1 54 0
+  94 0032 1BE0      		ldi r17,lo8(11)
+  95               	.LVL7:
+  96               	.L10:
+  53:86rksd.c      ****     c = wrecv();
+  97               		.loc 1 53 0
+  98 0034 0E94 0000 		call wrecv
+  99               	.LVL8:
+ 100               		.loc 1 54 0
+ 101 0038 90E0      		ldi r25,hi8(buf+469)
+ 102 003a C030      		cpi r28,lo8(buf+469)
+ 103 003c D907      		cpc r29,r25
+ 104 003e 01F0      		breq .L7
+ 105               	.LVL9:
+ 106               		.loc 1 54 0 is_stmt 0 discriminator 1
+ 107 0040 8883      		st Y,r24
+ 108 0042 2196      		adiw r28,1
+ 109               	.LVL10:
+ 110 0044 00C0      		rjmp .L8
+ 111               	.L7:
+ 112               		.loc 1 54 0 discriminator 2
+ 113 0046 1093 0000 		sts lastError,r17
+ 114               	.L8:
+  55:86rksd.c      ****   } while(c);
+ 115               		.loc 1 55 0 is_stmt 1
+ 116 004a 8111      		cpse r24,__zero_reg__
+ 117 004c 00C0      		rjmp .L10
+ 118               	/* epilogue start */
+  56:86rksd.c      **** }
+ 119               		.loc 1 56 0
+ 120 004e DF91      		pop r29
+ 121 0050 CF91      		pop r28
+ 122               	.LVL11:
+ 123 0052 1F91      		pop r17
+ 124 0054 0895      		ret
+ 125               		.cfi_endproc
+ 126               	.LFE8:
+ 128               	.global	sendBin
+ 130               	sendBin:
+ 131               	.LFB9:
+  57:86rksd.c      **** 
+  58:86rksd.c      **** void sendBin(uint8_t* p, WORD l) {
+ 132               		.loc 1 58 0
+ 133               		.cfi_startproc
+ 134               	.LVL12:
+ 135 0056 0F93      		push r16
+ 136               	.LCFI7:
+ 137               		.cfi_def_cfa_offset 3
+ 138               		.cfi_offset 16, -2
+ 139 0058 1F93      		push r17
+ 140               	.LCFI8:
+ 141               		.cfi_def_cfa_offset 4
+ 142               		.cfi_offset 17, -3
+ 143 005a CF93      		push r28
+ 144               	.LCFI9:
+ 145               		.cfi_def_cfa_offset 5
+ 146               		.cfi_offset 28, -4
+ 147 005c DF93      		push r29
+ 148               	.LCFI10:
+ 149               		.cfi_def_cfa_offset 6
+ 150               		.cfi_offset 29, -5
+ 151               	/* prologue: function */
+ 152               	/* frame size = 0 */
+ 153               	/* stack size = 4 */
+ 154               	.L__stack_usage = 4
+ 155 005e 8B01      		movw r16,r22
+ 156 0060 EC01      		movw r28,r24
+ 157 0062 080F      		add r16,r24
+ 158 0064 191F      		adc r17,r25
+ 159               	.LVL13:
+ 160               	.L12:
+  59:86rksd.c      ****   for(; l; l--)
+ 161               		.loc 1 59 0 discriminator 1
+ 162 0066 C017      		cp r28,r16
+ 163 0068 D107      		cpc r29,r17
+ 164 006a 01F0      		breq .L14
+ 165               	.LVL14:
+  60:86rksd.c      ****     send(*p++);
+ 166               		.loc 1 60 0 discriminator 2
+ 167 006c 8991      		ld r24,Y+
+ 168               	.LVL15:
+ 169 006e 0E94 0000 		call send
+ 170               	.LVL16:
+ 171 0072 00C0      		rjmp .L12
+ 172               	.L14:
+ 173               	/* epilogue start */
+  61:86rksd.c      **** }
+ 174               		.loc 1 61 0
+ 175 0074 DF91      		pop r29
+ 176 0076 CF91      		pop r28
+ 177               	.LVL17:
+ 178 0078 1F91      		pop r17
+ 179 007a 0F91      		pop r16
+ 180 007c 0895      		ret
+ 181               		.cfi_endproc
+ 182               	.LFE9:
+ 184               	.global	sendBinf
+ 186               	sendBinf:
+ 187               	.LFB10:
+  62:86rksd.c      **** 
+  63:86rksd.c      **** void sendBinf(const char* d, uint8_t l) {
+ 188               		.loc 1 63 0
+ 189               		.cfi_startproc
+ 190               	.LVL18:
+ 191 007e 0F93      		push r16
+ 192               	.LCFI11:
+ 193               		.cfi_def_cfa_offset 3
+ 194               		.cfi_offset 16, -2
+ 195 0080 1F93      		push r17
+ 196               	.LCFI12:
+ 197               		.cfi_def_cfa_offset 4
+ 198               		.cfi_offset 17, -3
+ 199 0082 CF93      		push r28
+ 200               	.LCFI13:
+ 201               		.cfi_def_cfa_offset 5
+ 202               		.cfi_offset 28, -4
+ 203 0084 DF93      		push r29
+ 204               	.LCFI14:
+ 205               		.cfi_def_cfa_offset 6
+ 206               		.cfi_offset 29, -5
+ 207 0086 1F92      		push __zero_reg__
+ 208               	.LCFI15:
+ 209               		.cfi_def_cfa_offset 7
+ 210 0088 CDB7      		in r28,__SP_L__
+ 211 008a DEB7      		in r29,__SP_H__
+ 212               	.LCFI16:
+ 213               		.cfi_def_cfa_register 28
+ 214               	/* prologue: function */
+ 215               	/* frame size = 1 */
+ 216               	/* stack size = 5 */
+ 217               	.L__stack_usage = 5
+ 218 008c 8C01      		movw r16,r24
+ 219               	.LVL19:
+ 220               	.L16:
+  64:86rksd.c      ****   for(; l; --l) {
+ 221               		.loc 1 64 0 discriminator 1
+ 222 008e 6623      		tst r22
+ 223 0090 01F0      		breq .L18
+ 224               	.LVL20:
+ 225               	.LBB12:
+ 226               	.LBB13:
+  65:86rksd.c      ****       uint8_t x = pgm_read_byte(*d++);
+ 227               		.loc 1 65 0 discriminator 2
+ 228 0092 D801      		movw r26,r16
+ 229 0094 ED91      		ld r30,X+
+ 230               	.LVL21:
+ 231 0096 8D01      		movw r16,r26
+ 232               	.LVL22:
+ 233 0098 F0E0      		ldi r31,0
+ 234               	/* #APP */
+ 235               	 ;  65 "86rksd.c" 1
+ 236 009a 8491      		lpm r24, Z
+ 237               		
+ 238               	 ;  0 "" 2
+ 239               	.LVL23:
+ 240               	/* #NOAPP */
+ 241               	.LBE13:
+  66:86rksd.c      ****       send(x);
+ 242               		.loc 1 66 0 discriminator 2
+ 243 009c 6983      		std Y+1,r22
+ 244 009e 0E94 0000 		call send
+ 245               	.LVL24:
+ 246               	.LBE12:
+  64:86rksd.c      ****   for(; l; --l) {
+ 247               		.loc 1 64 0 discriminator 2
+ 248 00a2 6981      		ldd r22,Y+1
+ 249 00a4 6150      		subi r22,lo8(-(-1))
+ 250               	.LVL25:
+ 251 00a6 00C0      		rjmp .L16
+ 252               	.L18:
+ 253               	/* epilogue start */
+  67:86rksd.c      ****   }
+  68:86rksd.c      **** }
+ 254               		.loc 1 68 0
+ 255 00a8 0F90      		pop __tmp_reg__
+ 256 00aa DF91      		pop r29
+ 257 00ac CF91      		pop r28
+ 258 00ae 1F91      		pop r17
+ 259 00b0 0F91      		pop r16
+ 260               	.LVL26:
+ 261 00b2 0895      		ret
+ 262               		.cfi_endproc
+ 263               	.LFE10:
+ 265               	.global	readInt
+ 267               	readInt:
+ 268               	.LFB11:
+  69:86rksd.c      **** 
+  70:86rksd.c      **** /*******************************************************************************
+  71:86rksd.c      **** * Отправка всех блоков файла                                                
+  72:86rksd.c      **** *******************************************************************************/
+  73:86rksd.c      **** 
+  74:86rksd.c      **** WORD readLength;
+  75:86rksd.c      **** 
+  76:86rksd.c      **** void readInt(char rks) { 
+ 269               		.loc 1 76 0
+ 270               		.cfi_startproc
+ 271               	.LVL27:
+ 272 00b4 EF92      		push r14
+ 273               	.LCFI17:
+ 274               		.cfi_def_cfa_offset 3
+ 275               		.cfi_offset 14, -2
+ 276 00b6 FF92      		push r15
+ 277               	.LCFI18:
+ 278               		.cfi_def_cfa_offset 4
+ 279               		.cfi_offset 15, -3
+ 280 00b8 0F93      		push r16
+ 281               	.LCFI19:
+ 282               		.cfi_def_cfa_offset 5
+ 283               		.cfi_offset 16, -4
+ 284 00ba 1F93      		push r17
+ 285               	.LCFI20:
+ 286               		.cfi_def_cfa_offset 6
+ 287               		.cfi_offset 17, -5
+ 288 00bc CF93      		push r28
+ 289               	.LCFI21:
+ 290               		.cfi_def_cfa_offset 7
+ 291               		.cfi_offset 28, -6
+ 292 00be DF93      		push r29
+ 293               	.LCFI22:
+ 294               		.cfi_def_cfa_offset 8
+ 295               		.cfi_offset 29, -7
+ 296 00c0 00D0      		rcall .
+ 297               	.LCFI23:
+ 298               		.cfi_def_cfa_offset 10
+ 299 00c2 CDB7      		in r28,__SP_L__
+ 300 00c4 DEB7      		in r29,__SP_H__
+ 301               	.LCFI24:
+ 302               		.cfi_def_cfa_register 28
+ 303               	/* prologue: function */
+ 304               	/* frame size = 2 */
+ 305               	/* stack size = 8 */
+ 306               	.L__stack_usage = 8
+ 307 00c6 182F      		mov r17,r24
+  77:86rksd.c      ****   WORD readedLength, lengthFromFile;        
+  78:86rksd.c      ****   uint8_t tmp;
+  79:86rksd.c      ****   uint8_t* wptr;
+  80:86rksd.c      **** 
+  81:86rksd.c      ****   while(readLength) { 
+  82:86rksd.c      ****     // Расчет длины блока (выравниваем чтение на сектор)
+  83:86rksd.c      ****     if(fs_tell()) return;
+  84:86rksd.c      ****     readedLength = 512 - (fs_tmp % 512);
+ 308               		.loc 1 84 0
+ 309 00c8 E12C      		mov r14,__zero_reg__
+ 310 00ca 82E0      		ldi r24,lo8(2)
+ 311 00cc F82E      		mov r15,r24
+ 312               	.LVL28:
+ 313               	.L20:
+  81:86rksd.c      ****   while(readLength) { 
+ 314               		.loc 1 81 0 discriminator 1
+ 315 00ce 2091 0000 		lds r18,readLength
+ 316 00d2 3091 0000 		lds r19,readLength+1
+ 317 00d6 232B      		or r18,r19
+ 318 00d8 01F4      		brne .+2
+ 319 00da 00C0      		rjmp .L29
+  83:86rksd.c      ****     if(fs_tell()) return;
+ 320               		.loc 1 83 0
+ 321 00dc 0E94 0000 		call fs_tell
+ 322               	.LVL29:
+ 323 00e0 8111      		cpse r24,__zero_reg__
+ 324 00e2 00C0      		rjmp .L19
+ 325               		.loc 1 84 0
+ 326 00e4 2091 0000 		lds r18,fs_tmp
+ 327 00e8 3091 0000 		lds r19,fs_tmp+1
+ 328 00ec 3170      		andi r19,1
+ 329 00ee A701      		movw r20,r14
+ 330 00f0 421B      		sub r20,r18
+ 331 00f2 530B      		sbc r21,r19
+ 332 00f4 5A83      		std Y+2,r21
+ 333 00f6 4983      		std Y+1,r20
+  85:86rksd.c      ****     if(readedLength > readLength) readedLength = readLength;
+ 334               		.loc 1 85 0
+ 335 00f8 2091 0000 		lds r18,readLength
+ 336 00fc 3091 0000 		lds r19,readLength+1
+ 337 0100 2417      		cp r18,r20
+ 338 0102 3507      		cpc r19,r21
+ 339 0104 00F4      		brsh .L22
+ 340               		.loc 1 85 0 is_stmt 0 discriminator 1
+ 341 0106 3A83      		std Y+2,r19
+ 342 0108 2983      		std Y+1,r18
+ 343               	.L22:
+  86:86rksd.c      **** 
+  87:86rksd.c      ****     // Уменьшаем счетчик
+  88:86rksd.c      ****     readLength -= readedLength;
+ 344               		.loc 1 88 0 is_stmt 1
+ 345 010a 6981      		ldd r22,Y+1
+ 346 010c 7A81      		ldd r23,Y+2
+ 347 010e 261B      		sub r18,r22
+ 348 0110 370B      		sbc r19,r23
+ 349 0112 3093 0000 		sts readLength+1,r19
+ 350 0116 2093 0000 		sts readLength,r18
+  89:86rksd.c      **** 
+  90:86rksd.c      ****     // Читаем блок
+  91:86rksd.c      ****     if(fs_read0(buf, readedLength)) return;
+ 351               		.loc 1 91 0
+ 352 011a 80E0      		ldi r24,lo8(buf)
+ 353 011c 90E0      		ldi r25,hi8(buf)
+ 354 011e 0E94 0000 		call fs_read0
+ 355               	.LVL30:
+ 356 0122 8111      		cpse r24,__zero_reg__
+ 357 0124 00C0      		rjmp .L19
+ 358               	.LVL31:
+  92:86rksd.c      **** 
+  93:86rksd.c      ****     // Заголовок RKS файла
+  94:86rksd.c      ****     wptr = buf;
+  95:86rksd.c      ****     if(rks) { // Если rks=1, перед вызовом надо проверить, что бы
+ 359               		.loc 1 95 0
+ 360 0126 1123      		tst r17
+ 361 0128 01F0      		breq .L27
+ 362               	.LVL32:
+  96:86rksd.c      ****       rks = 0;
+  97:86rksd.c      ****       
+  98:86rksd.c      ****       // У апогея числа перепутаны
+  99:86rksd.c      ****       tmp=buf[0], buf[0]=buf[1]; buf[1]=tmp;
+ 363               		.loc 1 99 0
+ 364 012a 8091 0000 		lds r24,buf
+ 365               	.LVL33:
+ 366 012e 9091 0000 		lds r25,buf+1
+ 367 0132 9093 0000 		sts buf,r25
+ 368 0136 8093 0000 		sts buf+1,r24
+ 100:86rksd.c      ****       tmp=buf[2], buf[2]=buf[3]; buf[3]=tmp;
+ 369               		.loc 1 100 0
+ 370 013a 8091 0000 		lds r24,buf+2
+ 371               	.LVL34:
+ 372 013e 9091 0000 		lds r25,buf+3
+ 373 0142 9093 0000 		sts buf+2,r25
+ 374 0146 8093 0000 		sts buf+3,r24
+ 101:86rksd.c      **** 
+ 102:86rksd.c      ****       // Посылаем адрес загрузки
+ 103:86rksd.c      ****       send(ERR_OK_RKS);
+ 375               		.loc 1 103 0
+ 376 014a 87E4      		ldi r24,lo8(71)
+ 377               	.LVL35:
+ 378 014c 0E94 0000 		call send
+ 379               	.LVL36:
+ 104:86rksd.c      ****       sendBin(buf, 2);    
+ 380               		.loc 1 104 0
+ 381 0150 62E0      		ldi r22,lo8(2)
+ 382 0152 70E0      		ldi r23,0
+ 383 0154 80E0      		ldi r24,lo8(buf)
+ 384 0156 90E0      		ldi r25,hi8(buf)
+ 385 0158 0E94 0000 		call sendBin
+ 386               	.LVL37:
+ 105:86rksd.c      ****       send(ERR_WAIT);
+ 387               		.loc 1 105 0
+ 388 015c 81E4      		ldi r24,lo8(65)
+ 389 015e 0E94 0000 		call send
+ 390               	.LVL38:
+ 106:86rksd.c      **** 
+ 107:86rksd.c      ****       // Корректируем указатели
+ 108:86rksd.c      ****       wptr += 4;
+ 109:86rksd.c      ****       readedLength -= 4;
+ 391               		.loc 1 109 0
+ 392 0162 2981      		ldd r18,Y+1
+ 393 0164 3A81      		ldd r19,Y+2
+ 394 0166 2450      		subi r18,4
+ 395 0168 3109      		sbc r19,__zero_reg__
+ 396 016a 3A83      		std Y+2,r19
+ 397 016c 2983      		std Y+1,r18
+ 110:86rksd.c      **** 
+ 111:86rksd.c      ****       // Длина из файла
+ 112:86rksd.c      ****       lengthFromFile = *(WORD*)(buf+2) - *(WORD*)(buf) + 1;
+ 398               		.loc 1 112 0
+ 399 016e 8091 0000 		lds r24,buf+2
+ 400 0172 9091 0000 		lds r25,buf+2+1
+ 401 0176 0196      		adiw r24,1
+ 402 0178 4091 0000 		lds r20,buf
+ 403 017c 5091 0000 		lds r21,buf+1
+ 404 0180 841B      		sub r24,r20
+ 405 0182 950B      		sbc r25,r21
+ 406               	.LVL39:
+ 113:86rksd.c      **** 
+ 114:86rksd.c      ****       // Корректируем длину  
+ 115:86rksd.c      ****       if(readedLength > lengthFromFile) {
+ 407               		.loc 1 115 0
+ 408 0184 8217      		cp r24,r18
+ 409 0186 9307      		cpc r25,r19
+ 410 0188 00F4      		brsh .L28
+ 116:86rksd.c      ****         readedLength = lengthFromFile;
+ 411               		.loc 1 116 0
+ 412 018a 9A83      		std Y+2,r25
+ 413 018c 8983      		std Y+1,r24
+ 414 018e 00C0      		rjmp .L28
+ 415               	.LVL40:
+ 416               	.L27:
+  94:86rksd.c      ****     wptr = buf;
+ 417               		.loc 1 94 0
+ 418 0190 00E0      		ldi r16,lo8(buf)
+ 419 0192 10E0      		ldi r17,hi8(buf)
+ 420 0194 00C0      		rjmp .L23
+ 421               	.LVL41:
+ 422               	.L28:
+ 108:86rksd.c      ****       wptr += 4;
+ 423               		.loc 1 108 0
+ 424 0196 00E0      		ldi r16,lo8(buf+4)
+ 425 0198 10E0      		ldi r17,hi8(buf+4)
+ 426               	.LVL42:
+ 427               	.L23:
+ 117:86rksd.c      ****       } else {          
+ 118:86rksd.c      ****         lengthFromFile -= readedLength;
+ 119:86rksd.c      ****         if(readLength > lengthFromFile) lengthFromFile = readedLength;
+ 120:86rksd.c      ****       }
+ 121:86rksd.c      ****     }  
+ 122:86rksd.c      **** 
+ 123:86rksd.c      ****     // Отправляем блок
+ 124:86rksd.c      ****     send(ERR_READ_BLOCK);    
+ 428               		.loc 1 124 0
+ 429 019a 8FE4      		ldi r24,lo8(79)
+ 430 019c 0E94 0000 		call send
+ 431               	.LVL43:
+ 125:86rksd.c      ****     sendBin((uint8_t*)&readedLength, 2);
+ 432               		.loc 1 125 0
+ 433 01a0 62E0      		ldi r22,lo8(2)
+ 434 01a2 70E0      		ldi r23,0
+ 435 01a4 CE01      		movw r24,r28
+ 436 01a6 0196      		adiw r24,1
+ 437 01a8 0E94 0000 		call sendBin
+ 438               	.LVL44:
+ 126:86rksd.c      ****     sendBin(wptr, readedLength);
+ 439               		.loc 1 126 0
+ 440 01ac 6981      		ldd r22,Y+1
+ 441 01ae 7A81      		ldd r23,Y+2
+ 442 01b0 C801      		movw r24,r16
+ 443 01b2 0E94 0000 		call sendBin
+ 444               	.LVL45:
+ 127:86rksd.c      ****     send(ERR_WAIT);
+ 445               		.loc 1 127 0
+ 446 01b6 81E4      		ldi r24,lo8(65)
+ 447 01b8 0E94 0000 		call send
+ 448               	.LVL46:
+ 449 01bc 10E0      		ldi r17,0
+ 450 01be 00C0      		rjmp .L20
+ 451               	.LVL47:
+ 452               	.L29:
+ 128:86rksd.c      ****   }
+ 129:86rksd.c      **** 
+ 130:86rksd.c      ****   // Если все ОК
+ 131:86rksd.c      ****   if(!lastError) lastError = ERR_OK_READ;
+ 453               		.loc 1 131 0
+ 454 01c0 8091 0000 		lds r24,lastError
+ 455 01c4 8111      		cpse r24,__zero_reg__
+ 456 01c6 00C0      		rjmp .L19
+ 457               		.loc 1 131 0 is_stmt 0 discriminator 1
+ 458 01c8 84E4      		ldi r24,lo8(68)
+ 459 01ca 8093 0000 		sts lastError,r24
+ 460               	.L19:
+ 461               	/* epilogue start */
+ 132:86rksd.c      **** }
+ 462               		.loc 1 132 0 is_stmt 1
+ 463 01ce 0F90      		pop __tmp_reg__
+ 464 01d0 0F90      		pop __tmp_reg__
+ 465 01d2 DF91      		pop r29
+ 466 01d4 CF91      		pop r28
+ 467 01d6 1F91      		pop r17
+ 468               	.LVL48:
+ 469 01d8 0F91      		pop r16
+ 470 01da FF90      		pop r15
+ 471 01dc EF90      		pop r14
+ 472 01de 0895      		ret
+ 473               		.cfi_endproc
+ 474               	.LFE11:
+ 476               	.global	cmd_ver
+ 478               	cmd_ver:
+ 479               	.LFB12:
+ 133:86rksd.c      **** 
+ 134:86rksd.c      **** /*******************************************************************************
+ 135:86rksd.c      **** * Версия команд контроллера                                                 
+ 136:86rksd.c      **** *******************************************************************************/
+ 137:86rksd.c      **** 
+ 138:86rksd.c      **** void cmd_ver(void) {
+ 480               		.loc 1 138 0
+ 481               		.cfi_startproc
+ 482               	/* prologue: function */
+ 483               	/* frame size = 0 */
+ 484               	/* stack size = 0 */
+ 485               	.L__stack_usage = 0
+ 139:86rksd.c      ****   sendStart(1);
+ 486               		.loc 1 139 0
+ 487 01e0 81E0      		ldi r24,lo8(1)
+ 488 01e2 0E94 0000 		call sendStart
+ 489               	.LVL49:
+ 140:86rksd.c      ****     
+ 141:86rksd.c      ****   // Версия + Производитель
+ 142:86rksd.c      ****   //sendBinf(PSTR("V1.0 10-05-2014 "), 16);
+ 143:86rksd.c      ****   sendBinf(PSTR("V1.1 RK86-SRAM  "), 16);
+ 490               		.loc 1 143 0
+ 491 01e6 60E1      		ldi r22,lo8(16)
+ 492 01e8 80E0      		ldi r24,lo8(__c.1999)
+ 493 01ea 90E0      		ldi r25,hi8(__c.1999)
+ 494 01ec 0C94 0000 		jmp sendBinf
+ 495               	.LVL50:
+ 496               		.cfi_endproc
+ 497               	.LFE12:
+ 499               	.global	cmd_boot_exec
+ 501               	cmd_boot_exec:
+ 502               	.LFB13:
+ 144:86rksd.c      ****               //0123456789ABCDEF
+ 145:86rksd.c      **** }
+ 146:86rksd.c      **** 
+ 147:86rksd.c      **** /*******************************************************************************
+ 148:86rksd.c      **** * BOOT / EXEC                                                                  *
+ 149:86rksd.c      **** *******************************************************************************/
+ 150:86rksd.c      **** 
+ 151:86rksd.c      **** void cmd_boot_exec(void) {
+ 503               		.loc 1 151 0
+ 504               		.cfi_startproc
+ 505               	/* prologue: function */
+ 506               	/* frame size = 0 */
+ 507               	/* stack size = 0 */
+ 508               	.L__stack_usage = 0
+ 152:86rksd.c      ****   // Файл по умолчанию
+ 153:86rksd.c      ****   if(buf[0]==0) strcpy_P((char*)buf, PSTR("boot/sdbios.rk"));
+ 509               		.loc 1 153 0
+ 510 01f0 8091 0000 		lds r24,buf
+ 511 01f4 8111      		cpse r24,__zero_reg__
+ 512 01f6 00C0      		rjmp .L32
+ 513               		.loc 1 153 0 is_stmt 0 discriminator 1
+ 514 01f8 60E0      		ldi r22,lo8(__c.2004)
+ 515 01fa 70E0      		ldi r23,hi8(__c.2004)
+ 516 01fc 80E0      		ldi r24,lo8(buf)
+ 517 01fe 90E0      		ldi r25,hi8(buf)
+ 518 0200 0E94 0000 		call strcpy_P
+ 519               	.LVL51:
+ 520               	.L32:
+ 154:86rksd.c      **** 
+ 155:86rksd.c      ****   // Открываем файл
+ 156:86rksd.c      ****   if(fs_open()) return;
+ 521               		.loc 1 156 0 is_stmt 1
+ 522 0204 0E94 0000 		call fs_open
+ 523               	.LVL52:
+ 524 0208 8111      		cpse r24,__zero_reg__
+ 525 020a 00C0      		rjmp .L31
+ 157:86rksd.c      ****   
+ 158:86rksd.c      ****   // Максимальный размер файла
+ 159:86rksd.c      ****   readLength = 0xFFFF;  
+ 526               		.loc 1 159 0
+ 527 020c 8FEF      		ldi r24,lo8(-1)
+ 528 020e 9FEF      		ldi r25,lo8(-1)
+ 529 0210 9093 0000 		sts readLength+1,r25
+ 530 0214 8093 0000 		sts readLength,r24
+ 160:86rksd.c      ****   if(fs_getfilesize()) return;
+ 531               		.loc 1 160 0
+ 532 0218 0E94 0000 		call fs_getfilesize
+ 533               	.LVL53:
+ 534 021c 8111      		cpse r24,__zero_reg__
+ 535 021e 00C0      		rjmp .L31
+ 536               	.LBB18:
+ 537               	.LBB19:
+ 161:86rksd.c      ****   if(readLength > fs_tmp) readLength = (WORD)fs_tmp;
+ 538               		.loc 1 161 0
+ 539 0220 8091 0000 		lds r24,fs_tmp
+ 540 0224 9091 0000 		lds r25,fs_tmp+1
+ 541 0228 A091 0000 		lds r26,fs_tmp+2
+ 542 022c B091 0000 		lds r27,fs_tmp+3
+ 543 0230 4091 0000 		lds r20,readLength
+ 544 0234 5091 0000 		lds r21,readLength+1
+ 545 0238 60E0      		ldi r22,0
+ 546 023a 70E0      		ldi r23,0
+ 547 023c 8417      		cp r24,r20
+ 548 023e 9507      		cpc r25,r21
+ 549 0240 A607      		cpc r26,r22
+ 550 0242 B707      		cpc r27,r23
+ 551 0244 00F4      		brsh .L36
+ 552 0246 9093 0000 		sts readLength+1,r25
+ 553 024a 8093 0000 		sts readLength,r24
+ 554               	.L36:
+ 162:86rksd.c      **** 
+ 163:86rksd.c      ****   // Файлы RK должны быть длиной >4 байт. Мы заносим в readLengt
+ 164:86rksd.c      ****   // получает ERR_OK. Но так как она ждем ERR_OK_RKS, это будет ош
+ 165:86rksd.c      ****   if(readLength < 4) readLength = 0;
+ 555               		.loc 1 165 0
+ 556 024e 8091 0000 		lds r24,readLength
+ 557 0252 9091 0000 		lds r25,readLength+1
+ 558 0256 0497      		sbiw r24,4
+ 559 0258 00F4      		brsh .L37
+ 560 025a 1092 0000 		sts readLength+1,__zero_reg__
+ 561 025e 1092 0000 		sts readLength,__zero_reg__
+ 562               	.L37:
+ 166:86rksd.c      **** 
+ 167:86rksd.c      ****   readInt(/*rks*/1);  
+ 563               		.loc 1 167 0
+ 564 0262 81E0      		ldi r24,lo8(1)
+ 565 0264 0C94 0000 		jmp readInt
+ 566               	.LVL54:
+ 567               	.L31:
+ 568 0268 0895      		ret
+ 569               	.LBE19:
+ 570               	.LBE18:
+ 571               		.cfi_endproc
+ 572               	.LFE13:
+ 574               	.global	cmd_boot
+ 576               	cmd_boot:
+ 577               	.LFB14:
+ 168:86rksd.c      **** }
+ 169:86rksd.c      **** 
+ 170:86rksd.c      **** void cmd_boot(void) { 
+ 578               		.loc 1 170 0
+ 579               		.cfi_startproc
+ 580               	/* prologue: function */
+ 581               	/* frame size = 0 */
+ 582               	/* stack size = 0 */
+ 583               	.L__stack_usage = 0
+ 171:86rksd.c      ****   sendStart(ERR_WAIT);
+ 584               		.loc 1 171 0
+ 585 026a 81E4      		ldi r24,lo8(65)
+ 586 026c 0E94 0000 		call sendStart
+ 587               	.LVL55:
+ 172:86rksd.c      ****   buf[0] = 0;
+ 588               		.loc 1 172 0
+ 589 0270 1092 0000 		sts buf,__zero_reg__
+ 173:86rksd.c      ****   cmd_boot_exec();  
+ 590               		.loc 1 173 0
+ 591 0274 0C94 0000 		jmp cmd_boot_exec
+ 592               	.LVL56:
+ 593               		.cfi_endproc
+ 594               	.LFE14:
+ 596               	.global	cmd_exec
+ 598               	cmd_exec:
+ 599               	.LFB15:
+ 174:86rksd.c      **** }
+ 175:86rksd.c      **** 
+ 176:86rksd.c      **** void cmd_exec(void) {     
+ 600               		.loc 1 176 0
+ 601               		.cfi_startproc
+ 602               	/* prologue: function */
+ 603               	/* frame size = 0 */
+ 604               	/* stack size = 0 */
+ 605               	.L__stack_usage = 0
+ 177:86rksd.c      ****   // Прием имени файла
+ 178:86rksd.c      ****   recvString();
+ 606               		.loc 1 178 0
+ 607 0278 0E94 0000 		call recvString
+ 608               	.LVL57:
+ 179:86rksd.c      **** 
+ 180:86rksd.c      ****   // Режим передачи и подтверждение
+ 181:86rksd.c      ****   sendStart(ERR_WAIT);
+ 609               		.loc 1 181 0
+ 610 027c 81E4      		ldi r24,lo8(65)
+ 611 027e 0E94 0000 		call sendStart
+ 612               	.LVL58:
+ 182:86rksd.c      ****   if(lastError) return; // Переполнение строки
+ 613               		.loc 1 182 0
+ 614 0282 8091 0000 		lds r24,lastError
+ 615 0286 8111      		cpse r24,__zero_reg__
+ 616 0288 00C0      		rjmp .L39
+ 183:86rksd.c      ****   
+ 184:86rksd.c      ****   cmd_boot_exec();    
+ 617               		.loc 1 184 0
+ 618 028a 0C94 0000 		jmp cmd_boot_exec
+ 619               	.LVL59:
+ 620               	.L39:
+ 621 028e 0895      		ret
+ 622               		.cfi_endproc
+ 623               	.LFE15:
+ 625               	.global	cmd_find
+ 627               	cmd_find:
+ 628               	.LFB16:
+ 185:86rksd.c      **** }
+ 186:86rksd.c      **** 
+ 187:86rksd.c      **** /*******************************************************************************
+ 188:86rksd.c      **** * Начать/продолжить поиск файлов в папке                          
+ 189:86rksd.c      **** *******************************************************************************/
+ 190:86rksd.c      **** 
+ 191:86rksd.c      **** typedef struct {
+ 192:86rksd.c      ****     char    fname[11];    // File name
+ 193:86rksd.c      ****     uint8_t    fattrib;    // Attribute
+ 194:86rksd.c      ****     DWORD   fsize;        // File size
+ 195:86rksd.c      ****     union {
+ 196:86rksd.c      ****       struct {
+ 197:86rksd.c      ****         WORD    ftime;        // Last modified time
+ 198:86rksd.c      ****         WORD    fdate;        // Last modified date 
+ 199:86rksd.c      ****       };
+ 200:86rksd.c      ****       DWORD ftimedate;
+ 201:86rksd.c      ****     };
+ 202:86rksd.c      **** } FILINFO2;
+ 203:86rksd.c      **** 
+ 204:86rksd.c      **** void cmd_find(void) {
+ 629               		.loc 1 204 0
+ 630               		.cfi_startproc
+ 631 0290 1F93      		push r17
+ 632               	.LCFI25:
+ 633               		.cfi_def_cfa_offset 3
+ 634               		.cfi_offset 17, -2
+ 635 0292 CF93      		push r28
+ 636               	.LCFI26:
+ 637               		.cfi_def_cfa_offset 4
+ 638               		.cfi_offset 28, -3
+ 639 0294 DF93      		push r29
+ 640               	.LCFI27:
+ 641               		.cfi_def_cfa_offset 5
+ 642               		.cfi_offset 29, -4
+ 643 0296 CDB7      		in r28,__SP_L__
+ 644 0298 DEB7      		in r29,__SP_H__
+ 645               	.LCFI28:
+ 646               		.cfi_def_cfa_register 28
+ 647 029a 6697      		sbiw r28,22
+ 648               	.LCFI29:
+ 649               		.cfi_def_cfa_offset 27
+ 650 029c 0FB6      		in __tmp_reg__,__SREG__
+ 651 029e F894      		cli
+ 652 02a0 DEBF      		out __SP_H__,r29
+ 653 02a2 0FBE      		out __SREG__,__tmp_reg__
+ 654 02a4 CDBF      		out __SP_L__,r28
+ 655               	/* prologue: function */
+ 656               	/* frame size = 22 */
+ 657               	/* stack size = 25 */
+ 658               	.L__stack_usage = 25
+ 205:86rksd.c      ****   WORD n;
+ 206:86rksd.c      ****   FILINFO2 info;              
+ 207:86rksd.c      ****   
+ 208:86rksd.c      ****   // Принимаем путь
+ 209:86rksd.c      ****   recvString();
+ 659               		.loc 1 209 0
+ 660 02a6 0E94 0000 		call recvString
+ 661               	.LVL60:
+ 210:86rksd.c      **** 
+ 211:86rksd.c      ****   // Принимаем макс кол-во элементов
+ 212:86rksd.c      ****   recvBin((uint8_t*)&n, 2);
+ 662               		.loc 1 212 0
+ 663 02aa 62E0      		ldi r22,lo8(2)
+ 664 02ac 70E0      		ldi r23,0
+ 665 02ae CE01      		movw r24,r28
+ 666 02b0 4596      		adiw r24,21
+ 667 02b2 0E94 0000 		call recvBin
+ 668               	.LVL61:
+ 213:86rksd.c      **** 
+ 214:86rksd.c      ****   // Режим передачи и подтверждение
+ 215:86rksd.c      ****   sendStart(ERR_WAIT);
+ 669               		.loc 1 215 0
+ 670 02b6 81E4      		ldi r24,lo8(65)
+ 671 02b8 0E94 0000 		call sendStart
+ 672               	.LVL62:
+ 216:86rksd.c      ****   if(lastError) return;
+ 673               		.loc 1 216 0
+ 674 02bc 8091 0000 		lds r24,lastError
+ 675 02c0 8111      		cpse r24,__zero_reg__
+ 676 02c2 00C0      		rjmp .L41
+ 217:86rksd.c      **** 
+ 218:86rksd.c      ****   // Открываем папку
+ 219:86rksd.c      ****   if(buf[0] != ':') {
+ 677               		.loc 1 219 0
+ 678 02c4 8091 0000 		lds r24,buf
+ 679 02c8 8A33      		cpi r24,lo8(58)
+ 680 02ca 01F4      		brne .L43
+ 681               	.L45:
+ 220:86rksd.c      ****     if(fs_opendir()) return;
+ 221:86rksd.c      ****   }
+ 222:86rksd.c      **** 
+ 223:86rksd.c      ****   for(; n; --n) {
+ 224:86rksd.c      ****     /* Читаем очереной описатель */
+ 225:86rksd.c      ****     if(fs_readdir()) return;
+ 226:86rksd.c      **** 
+ 227:86rksd.c      ****     /* Конец */
+ 228:86rksd.c      ****     if(FS_DIRENTRY[0] == 0) {
+ 229:86rksd.c      ****       lastError = ERR_OK_CMD;
+ 230:86rksd.c      ****       return;
+ 231:86rksd.c      ****     }
+ 232:86rksd.c      **** 
+ 233:86rksd.c      ****     /* Сжимаем ответ для компьютера */
+ 234:86rksd.c      ****     memcpy(info.fname, FS_DIRENTRY+DIR_Name, 12);
+ 682               		.loc 1 234 0
+ 683 02cc 1CE0      		ldi r17,lo8(12)
+ 684 02ce 00C0      		rjmp .L44
+ 685               	.L43:
+ 220:86rksd.c      ****     if(fs_opendir()) return;
+ 686               		.loc 1 220 0
+ 687 02d0 0E94 0000 		call fs_opendir
+ 688               	.LVL63:
+ 689 02d4 8111      		cpse r24,__zero_reg__
+ 690 02d6 00C0      		rjmp .L41
+ 691 02d8 00C0      		rjmp .L45
+ 692               	.L46:
+ 693               		.loc 1 234 0
+ 694 02da E0E0      		ldi r30,lo8(buf+480)
+ 695 02dc F0E0      		ldi r31,hi8(buf+480)
+ 696 02de DE01      		movw r26,r28
+ 697 02e0 1196      		adiw r26,1
+ 698 02e2 812F      		mov r24,r17
+ 699               		0:
+ 700 02e4 0190      		ld r0,Z+
+ 701 02e6 0D92      		st X+,r0
+ 702 02e8 8A95      		dec r24
+ 703 02ea 01F4      		brne 0b
+ 235:86rksd.c      ****     memcpy(&info.fsize, FS_DIRENTRY+DIR_FileSize, 4);
+ 704               		.loc 1 235 0
+ 705 02ec 8091 0000 		lds r24,buf+508
+ 706 02f0 9091 0000 		lds r25,buf+508+1
+ 707 02f4 A091 0000 		lds r26,buf+508+2
+ 708 02f8 B091 0000 		lds r27,buf+508+3
+ 709 02fc 8D87      		std Y+13,r24
+ 710 02fe 9E87      		std Y+14,r25
+ 711 0300 AF87      		std Y+15,r26
+ 712 0302 B88B      		std Y+16,r27
+ 236:86rksd.c      ****     memcpy(&info.ftimedate, FS_DIRENTRY+DIR_WrtTime, 4);
+ 713               		.loc 1 236 0
+ 714 0304 8091 0000 		lds r24,buf+502
+ 715 0308 9091 0000 		lds r25,buf+502+1
+ 716 030c A091 0000 		lds r26,buf+502+2
+ 717 0310 B091 0000 		lds r27,buf+502+3
+ 718 0314 898B      		std Y+17,r24
+ 719 0316 9A8B      		std Y+18,r25
+ 720 0318 AB8B      		std Y+19,r26
+ 721 031a BC8B      		std Y+20,r27
+ 237:86rksd.c      ****     //memcpy(memcpy(memcpy(info.fname, FS_DIRENTRY+DIR_Name, 12, FS_DIRENTRY+DIR_FileSize, 4), FS_D
+ 238:86rksd.c      **** 
+ 239:86rksd.c      ****     /* Отправляем */
+ 240:86rksd.c      ****     send(ERR_OK_ENTRY);
+ 722               		.loc 1 240 0
+ 723 031c 85E4      		ldi r24,lo8(69)
+ 724 031e 0E94 0000 		call send
+ 725               	.LVL64:
+ 241:86rksd.c      ****     sendBin((uint8_t*)&info, sizeof(info));
+ 726               		.loc 1 241 0
+ 727 0322 64E1      		ldi r22,lo8(20)
+ 728 0324 70E0      		ldi r23,0
+ 729 0326 CE01      		movw r24,r28
+ 730 0328 0196      		adiw r24,1
+ 731 032a 0E94 0000 		call sendBin
+ 732               	.LVL65:
+ 242:86rksd.c      ****     send(ERR_WAIT);
+ 733               		.loc 1 242 0
+ 734 032e 81E4      		ldi r24,lo8(65)
+ 735 0330 0E94 0000 		call send
+ 736               	.LVL66:
+ 223:86rksd.c      ****   for(; n; --n) {
+ 737               		.loc 1 223 0
+ 738 0334 8D89      		ldd r24,Y+21
+ 739 0336 9E89      		ldd r25,Y+22
+ 740 0338 0197      		sbiw r24,1
+ 741 033a 9E8B      		std Y+22,r25
+ 742 033c 8D8B      		std Y+21,r24
+ 743               	.L44:
+ 223:86rksd.c      ****   for(; n; --n) {
+ 744               		.loc 1 223 0 is_stmt 0 discriminator 1
+ 745 033e 8D89      		ldd r24,Y+21
+ 746 0340 9E89      		ldd r25,Y+22
+ 747 0342 892B      		or r24,r25
+ 748 0344 01F0      		breq .L51
+ 225:86rksd.c      ****     if(fs_readdir()) return;
+ 749               		.loc 1 225 0 is_stmt 1
+ 750 0346 0E94 0000 		call fs_readdir
+ 751               	.LVL67:
+ 752 034a 8111      		cpse r24,__zero_reg__
+ 753 034c 00C0      		rjmp .L41
+ 228:86rksd.c      ****     if(FS_DIRENTRY[0] == 0) {
+ 754               		.loc 1 228 0
+ 755 034e 8091 0000 		lds r24,buf+480
+ 756 0352 8111      		cpse r24,__zero_reg__
+ 757 0354 00C0      		rjmp .L46
+ 229:86rksd.c      ****       lastError = ERR_OK_CMD;
+ 758               		.loc 1 229 0
+ 759 0356 83E4      		ldi r24,lo8(67)
+ 760 0358 00C0      		rjmp .L50
+ 761               	.L51:
+ 243:86rksd.c      ****   }
+ 244:86rksd.c      **** 
+ 245:86rksd.c      ****   /* Ограничение по размеру */  
+ 246:86rksd.c      ****   lastError = ERR_MAX_FILES; /*! Надо опеределать, что бы не было лож�
+ 762               		.loc 1 246 0
+ 763 035a 8AE0      		ldi r24,lo8(10)
+ 764               	.L50:
+ 765 035c 8093 0000 		sts lastError,r24
+ 766               	.L41:
+ 767               	/* epilogue start */
+ 247:86rksd.c      **** }
+ 768               		.loc 1 247 0
+ 769 0360 6696      		adiw r28,22
+ 770 0362 0FB6      		in __tmp_reg__,__SREG__
+ 771 0364 F894      		cli
+ 772 0366 DEBF      		out __SP_H__,r29
+ 773 0368 0FBE      		out __SREG__,__tmp_reg__
+ 774 036a CDBF      		out __SP_L__,r28
+ 775 036c DF91      		pop r29
+ 776 036e CF91      		pop r28
+ 777 0370 1F91      		pop r17
+ 778 0372 0895      		ret
+ 779               		.cfi_endproc
+ 780               	.LFE16:
+ 782               	.global	cmd_open
+ 784               	cmd_open:
+ 785               	.LFB17:
+ 248:86rksd.c      **** 
+ 249:86rksd.c      **** /*******************************************************************************
+ 250:86rksd.c      **** * Открыть/создать файл/папку                                                
+ 251:86rksd.c      **** *******************************************************************************/
+ 252:86rksd.c      **** 
+ 253:86rksd.c      **** void cmd_open(void) {
+ 786               		.loc 1 253 0
+ 787               		.cfi_startproc
+ 788 0374 CF93      		push r28
+ 789               	.LCFI30:
+ 790               		.cfi_def_cfa_offset 3
+ 791               		.cfi_offset 28, -2
+ 792               	/* prologue: function */
+ 793               	/* frame size = 0 */
+ 794               	/* stack size = 1 */
+ 795               	.L__stack_usage = 1
+ 254:86rksd.c      ****   uint8_t mode;
+ 255:86rksd.c      ****  
+ 256:86rksd.c      ****   /* Принимаем режим */
+ 257:86rksd.c      ****   mode = wrecv();    
+ 796               		.loc 1 257 0
+ 797 0376 0E94 0000 		call wrecv
+ 798               	.LVL68:
+ 799 037a C82F      		mov r28,r24
+ 800               	.LVL69:
+ 258:86rksd.c      **** 
+ 259:86rksd.c      ****   // Принимаем имя файла
+ 260:86rksd.c      ****   recvString();
+ 801               		.loc 1 260 0
+ 802 037c 0E94 0000 		call recvString
+ 803               	.LVL70:
+ 261:86rksd.c      **** 
+ 262:86rksd.c      ****   // Режим передачи и подтверждение
+ 263:86rksd.c      ****   sendStart(ERR_WAIT);
+ 804               		.loc 1 263 0
+ 805 0380 81E4      		ldi r24,lo8(65)
+ 806 0382 0E94 0000 		call sendStart
+ 807               	.LVL71:
+ 264:86rksd.c      **** 
+ 265:86rksd.c      ****   // Открываем/создаем файл/папку
+ 266:86rksd.c      ****   if(mode == O_SWAP) {
+ 808               		.loc 1 266 0
+ 809 0386 C536      		cpi r28,lo8(101)
+ 810 0388 01F4      		brne .L53
+ 267:86rksd.c      ****     fs_swap();
+ 811               		.loc 1 267 0
+ 812 038a 0E94 0000 		call fs_swap
+ 813               	.LVL72:
+ 814 038e 00C0      		rjmp .L54
+ 815               	.L53:
+ 268:86rksd.c      ****   } else
+ 269:86rksd.c      ****   if(mode == O_DELETE) {
+ 816               		.loc 1 269 0
+ 817 0390 C436      		cpi r28,lo8(100)
+ 818 0392 01F4      		brne .L55
+ 270:86rksd.c      ****     fs_delete();
+ 819               		.loc 1 270 0
+ 820 0394 0E94 0000 		call fs_delete
+ 821               	.LVL73:
+ 822 0398 00C0      		rjmp .L54
+ 823               	.L55:
+ 271:86rksd.c      ****   } else
+ 272:86rksd.c      ****   if(mode == O_OPEN) {
+ 824               		.loc 1 272 0
+ 825 039a C111      		cpse r28,__zero_reg__
+ 826 039c 00C0      		rjmp .L56
+ 273:86rksd.c      ****     fs_open();
+ 827               		.loc 1 273 0
+ 828 039e 0E94 0000 		call fs_open
+ 829               	.LVL74:
+ 830 03a2 00C0      		rjmp .L54
+ 831               	.L56:
+ 274:86rksd.c      ****   } else 
+ 275:86rksd.c      ****   if(mode < 3) {
+ 832               		.loc 1 275 0
+ 833 03a4 C330      		cpi r28,lo8(3)
+ 834 03a6 00F4      		brsh .L57
+ 276:86rksd.c      ****     fs_open0(mode);
+ 835               		.loc 1 276 0
+ 836 03a8 8C2F      		mov r24,r28
+ 837 03aa 0E94 0000 		call fs_open0
+ 838               	.LVL75:
+ 839 03ae 00C0      		rjmp .L54
+ 840               	.L57:
+ 277:86rksd.c      ****   } else {
+ 278:86rksd.c      ****     lastError = ERR_INVALID_COMMAND;
+ 841               		.loc 1 278 0
+ 842 03b0 8CE0      		ldi r24,lo8(12)
+ 843 03b2 8093 0000 		sts lastError,r24
+ 844               	.L54:
+ 279:86rksd.c      ****   }
+ 280:86rksd.c      **** 
+ 281:86rksd.c      ****   // Ок
+ 282:86rksd.c      ****   if(!lastError) lastError = ERR_OK_CMD;
+ 845               		.loc 1 282 0
+ 846 03b6 8091 0000 		lds r24,lastError
+ 847 03ba 8111      		cpse r24,__zero_reg__
+ 848 03bc 00C0      		rjmp .L52
+ 849               		.loc 1 282 0 is_stmt 0 discriminator 1
+ 850 03be 83E4      		ldi r24,lo8(67)
+ 851 03c0 8093 0000 		sts lastError,r24
+ 852               	.L52:
+ 853               	/* epilogue start */
+ 283:86rksd.c      **** }
+ 854               		.loc 1 283 0 is_stmt 1
+ 855 03c4 CF91      		pop r28
+ 856               	.LVL76:
+ 857 03c6 0895      		ret
+ 858               		.cfi_endproc
+ 859               	.LFE17:
+ 861               	.global	cmd_move
+ 863               	cmd_move:
+ 864               	.LFB18:
+ 284:86rksd.c      **** 
+ 285:86rksd.c      **** /*******************************************************************************
+ 286:86rksd.c      **** * Переместить файл/папку                                                       
+ 287:86rksd.c      **** *******************************************************************************/
+ 288:86rksd.c      **** 
+ 289:86rksd.c      **** void cmd_move(void) {
+ 865               		.loc 1 289 0
+ 866               		.cfi_startproc
+ 867               	/* prologue: function */
+ 868               	/* frame size = 0 */
+ 869               	/* stack size = 0 */
+ 870               	.L__stack_usage = 0
+ 290:86rksd.c      ****   recvString();
+ 871               		.loc 1 290 0
+ 872 03c8 0E94 0000 		call recvString
+ 873               	.LVL77:
+ 291:86rksd.c      ****   sendStart(ERR_WAIT);
+ 874               		.loc 1 291 0
+ 875 03cc 81E4      		ldi r24,lo8(65)
+ 876 03ce 0E94 0000 		call sendStart
+ 877               	.LVL78:
+ 292:86rksd.c      ****   fs_openany();
+ 878               		.loc 1 292 0
+ 879 03d2 80E0      		ldi r24,0
+ 880 03d4 0E94 0000 		call fs_open0
+ 881               	.LVL79:
+ 293:86rksd.c      ****   sendStart(ERR_OK_WRITE);
+ 882               		.loc 1 293 0
+ 883 03d8 86E4      		ldi r24,lo8(70)
+ 884 03da 0E94 0000 		call sendStart
+ 885               	.LVL80:
+ 294:86rksd.c      ****   recvStart();
+ 886               		.loc 1 294 0
+ 887 03de 0E94 0000 		call recvStart
+ 888               	.LVL81:
+ 295:86rksd.c      ****   recvString();
+ 889               		.loc 1 295 0
+ 890 03e2 0E94 0000 		call recvString
+ 891               	.LVL82:
+ 296:86rksd.c      ****   sendStart(ERR_WAIT);
+ 892               		.loc 1 296 0
+ 893 03e6 81E4      		ldi r24,lo8(65)
+ 894 03e8 0E94 0000 		call sendStart
+ 895               	.LVL83:
+ 297:86rksd.c      ****   if(!lastError) fs_move0();
+ 896               		.loc 1 297 0
+ 897 03ec 8091 0000 		lds r24,lastError
+ 898 03f0 8111      		cpse r24,__zero_reg__
+ 899 03f2 00C0      		rjmp .L60
+ 900               		.loc 1 297 0 is_stmt 0 discriminator 1
+ 901 03f4 0E94 0000 		call fs_move0
+ 902               	.LVL84:
+ 903               	.L60:
+ 298:86rksd.c      ****   if(!lastError) lastError = ERR_OK_CMD;
+ 904               		.loc 1 298 0 is_stmt 1
+ 905 03f8 8091 0000 		lds r24,lastError
+ 906 03fc 8111      		cpse r24,__zero_reg__
+ 907 03fe 00C0      		rjmp .L59
+ 908               		.loc 1 298 0 is_stmt 0 discriminator 1
+ 909 0400 83E4      		ldi r24,lo8(67)
+ 910 0402 8093 0000 		sts lastError,r24
+ 911               	.L59:
+ 912 0406 0895      		ret
+ 913               		.cfi_endproc
+ 914               	.LFE18:
+ 916               	.global	cmd_lseek
+ 918               	cmd_lseek:
+ 919               	.LFB19:
+ 299:86rksd.c      **** }
+ 300:86rksd.c      **** 
+ 301:86rksd.c      **** /*******************************************************************************
+ 302:86rksd.c      **** * Установить/прочитать указатель чтения                          
+ 303:86rksd.c      **** *******************************************************************************/
+ 304:86rksd.c      **** 
+ 305:86rksd.c      **** void cmd_lseek(void) {
+ 920               		.loc 1 305 0 is_stmt 1
+ 921               		.cfi_startproc
+ 922 0408 CF93      		push r28
+ 923               	.LCFI31:
+ 924               		.cfi_def_cfa_offset 3
+ 925               		.cfi_offset 28, -2
+ 926 040a DF93      		push r29
+ 927               	.LCFI32:
+ 928               		.cfi_def_cfa_offset 4
+ 929               		.cfi_offset 29, -3
+ 930 040c 00D0      		rcall .
+ 931 040e 00D0      		rcall .
+ 932 0410 1F92      		push __zero_reg__
+ 933               	.LCFI33:
+ 934               		.cfi_def_cfa_offset 9
+ 935 0412 CDB7      		in r28,__SP_L__
+ 936 0414 DEB7      		in r29,__SP_H__
+ 937               	.LCFI34:
+ 938               		.cfi_def_cfa_register 28
+ 939               	/* prologue: function */
+ 940               	/* frame size = 5 */
+ 941               	/* stack size = 7 */
+ 942               	.L__stack_usage = 7
+ 306:86rksd.c      ****   uint8_t mode;
+ 307:86rksd.c      ****   DWORD off;
+ 308:86rksd.c      **** 
+ 309:86rksd.c      ****   // Принимаем режим и смещение
+ 310:86rksd.c      ****   mode = wrecv();    
+ 943               		.loc 1 310 0
+ 944 0416 0E94 0000 		call wrecv
+ 945               	.LVL85:
+ 946 041a 482F      		mov r20,r24
+ 947               	.LVL86:
+ 311:86rksd.c      ****   recvBin((uint8_t*)&off, 4);    
+ 948               		.loc 1 311 0
+ 949 041c 64E0      		ldi r22,lo8(4)
+ 950 041e 70E0      		ldi r23,0
+ 951 0420 CE01      		movw r24,r28
+ 952 0422 0196      		adiw r24,1
+ 953 0424 4D83      		std Y+5,r20
+ 954 0426 0E94 0000 		call recvBin
+ 955               	.LVL87:
+ 312:86rksd.c      **** 
+ 313:86rksd.c      ****   // Режим передачи и подтверждение
+ 314:86rksd.c      ****   sendStart(ERR_WAIT);
+ 956               		.loc 1 314 0
+ 957 042a 81E4      		ldi r24,lo8(65)
+ 958 042c 0E94 0000 		call sendStart
+ 959               	.LVL88:
+ 315:86rksd.c      **** 
+ 316:86rksd.c      ****   // Размер файла
+ 317:86rksd.c      ****   if(mode==100) {
+ 960               		.loc 1 317 0
+ 961 0430 4D81      		ldd r20,Y+5
+ 962 0432 4436      		cpi r20,lo8(100)
+ 963 0434 01F4      		brne .L63
+ 318:86rksd.c      ****     if(fs_getfilesize()) return;
+ 964               		.loc 1 318 0
+ 965 0436 0E94 0000 		call fs_getfilesize
+ 966               	.LVL89:
+ 967               	.L72:
+ 968 043a 8111      		cpse r24,__zero_reg__
+ 969 043c 00C0      		rjmp .L62
+ 319:86rksd.c      ****   }
+ 320:86rksd.c      **** 
+ 321:86rksd.c      ****   // Размер диска  
+ 322:86rksd.c      ****   else if(mode==101) {
+ 323:86rksd.c      ****     if(fs_gettotal()) return;
+ 324:86rksd.c      ****   }
+ 325:86rksd.c      ****  
+ 326:86rksd.c      ****   // Свободное место на диске
+ 327:86rksd.c      ****   else if(mode==102) {
+ 328:86rksd.c      ****     if(fs_getfree()) return;
+ 329:86rksd.c      ****   }
+ 330:86rksd.c      **** 
+ 331:86rksd.c      ****   else {
+ 332:86rksd.c      ****     /* Устаналиваем смещение. fs_tmp сохраняется */
+ 333:86rksd.c      ****     if(fs_lseek(off, mode)) return;
+ 334:86rksd.c      ****   }
+ 335:86rksd.c      **** 
+ 336:86rksd.c      ****   // Передаем результат
+ 337:86rksd.c      ****   send(ERR_OK_CMD);
+ 970               		.loc 1 337 0
+ 971 043e 83E4      		ldi r24,lo8(67)
+ 972 0440 0E94 0000 		call send
+ 973               	.LVL90:
+ 338:86rksd.c      ****   sendBin((uint8_t*)&fs_tmp, 4);  
+ 974               		.loc 1 338 0
+ 975 0444 64E0      		ldi r22,lo8(4)
+ 976 0446 70E0      		ldi r23,0
+ 977 0448 80E0      		ldi r24,lo8(fs_tmp)
+ 978 044a 90E0      		ldi r25,hi8(fs_tmp)
+ 979 044c 0E94 0000 		call sendBin
+ 980               	.LVL91:
+ 339:86rksd.c      ****   lastError = 0; // На всякий случай, результат уже передан
+ 981               		.loc 1 339 0
+ 982 0450 1092 0000 		sts lastError,__zero_reg__
+ 983 0454 00C0      		rjmp .L62
+ 984               	.L63:
+ 322:86rksd.c      ****   else if(mode==101) {
+ 985               		.loc 1 322 0
+ 986 0456 4536      		cpi r20,lo8(101)
+ 987 0458 01F4      		brne .L66
+ 323:86rksd.c      ****     if(fs_gettotal()) return;
+ 988               		.loc 1 323 0
+ 989 045a 0E94 0000 		call fs_gettotal
+ 990               	.LVL92:
+ 991 045e 00C0      		rjmp .L72
+ 992               	.L66:
+ 327:86rksd.c      ****   else if(mode==102) {
+ 993               		.loc 1 327 0
+ 994 0460 4636      		cpi r20,lo8(102)
+ 995 0462 01F4      		brne .L68
+ 328:86rksd.c      ****     if(fs_getfree()) return;
+ 996               		.loc 1 328 0
+ 997 0464 0E94 0000 		call fs_getfree
+ 998               	.LVL93:
+ 999 0468 00C0      		rjmp .L72
+ 1000               	.L68:
+ 333:86rksd.c      ****     if(fs_lseek(off, mode)) return;
+ 1001               		.loc 1 333 0
+ 1002 046a 6981      		ldd r22,Y+1
+ 1003 046c 7A81      		ldd r23,Y+2
+ 1004 046e 8B81      		ldd r24,Y+3
+ 1005 0470 9C81      		ldd r25,Y+4
+ 1006 0472 0E94 0000 		call fs_lseek
+ 1007               	.LVL94:
+ 1008 0476 00C0      		rjmp .L72
+ 1009               	.L62:
+ 1010               	/* epilogue start */
+ 340:86rksd.c      **** }
+ 1011               		.loc 1 340 0
+ 1012 0478 0F90      		pop __tmp_reg__
+ 1013 047a 0F90      		pop __tmp_reg__
+ 1014 047c 0F90      		pop __tmp_reg__
+ 1015 047e 0F90      		pop __tmp_reg__
+ 1016 0480 0F90      		pop __tmp_reg__
+ 1017 0482 DF91      		pop r29
+ 1018 0484 CF91      		pop r28
+ 1019 0486 0895      		ret
+ 1020               		.cfi_endproc
+ 1021               	.LFE19:
+ 1023               	.global	cmd_read
+ 1025               	cmd_read:
+ 1026               	.LFB20:
+ 341:86rksd.c      **** 
+ 342:86rksd.c      **** /*******************************************************************************
+ 343:86rksd.c      **** * Прочитать из файла                                                           *
+ 344:86rksd.c      **** *******************************************************************************/
+ 345:86rksd.c      **** 
+ 346:86rksd.c      **** void cmd_read(void) {
+ 1027               		.loc 1 346 0
+ 1028               		.cfi_startproc
+ 1029 0488 CF92      		push r12
+ 1030               	.LCFI35:
+ 1031               		.cfi_def_cfa_offset 3
+ 1032               		.cfi_offset 12, -2
+ 1033 048a DF92      		push r13
+ 1034               	.LCFI36:
+ 1035               		.cfi_def_cfa_offset 4
+ 1036               		.cfi_offset 13, -3
+ 1037 048c EF92      		push r14
+ 1038               	.LCFI37:
+ 1039               		.cfi_def_cfa_offset 5
+ 1040               		.cfi_offset 14, -4
+ 1041 048e FF92      		push r15
+ 1042               	.LCFI38:
+ 1043               		.cfi_def_cfa_offset 6
+ 1044               		.cfi_offset 15, -5
+ 1045               	/* prologue: function */
+ 1046               	/* frame size = 0 */
+ 1047               	/* stack size = 4 */
+ 1048               	.L__stack_usage = 4
+ 347:86rksd.c      ****   DWORD s;
+ 348:86rksd.c      **** 
+ 349:86rksd.c      ****   // Длина
+ 350:86rksd.c      ****   recvBin((uint8_t*)&readLength, 2);
+ 1049               		.loc 1 350 0
+ 1050 0490 62E0      		ldi r22,lo8(2)
+ 1051 0492 70E0      		ldi r23,0
+ 1052 0494 80E0      		ldi r24,lo8(readLength)
+ 1053 0496 90E0      		ldi r25,hi8(readLength)
+ 1054 0498 0E94 0000 		call recvBin
+ 1055               	.LVL95:
+ 351:86rksd.c      **** 
+ 352:86rksd.c      ****   // Режим передачи и подтверждение
+ 353:86rksd.c      ****   sendStart(ERR_WAIT);
+ 1056               		.loc 1 353 0
+ 1057 049c 81E4      		ldi r24,lo8(65)
+ 1058 049e 0E94 0000 		call sendStart
+ 1059               	.LVL96:
+ 354:86rksd.c      **** 
+ 355:86rksd.c      ****   // Ограничиваем длину длиной файла
+ 356:86rksd.c      ****   if(fs_getfilesize()) return;
+ 1060               		.loc 1 356 0
+ 1061 04a2 0E94 0000 		call fs_getfilesize
+ 1062               	.LVL97:
+ 1063 04a6 8111      		cpse r24,__zero_reg__
+ 1064 04a8 00C0      		rjmp .L75
+ 357:86rksd.c      ****   s = fs_tmp; 
+ 1065               		.loc 1 357 0
+ 1066 04aa C090 0000 		lds r12,fs_tmp
+ 1067 04ae D090 0000 		lds r13,fs_tmp+1
+ 1068 04b2 E090 0000 		lds r14,fs_tmp+2
+ 1069 04b6 F090 0000 		lds r15,fs_tmp+3
+ 1070               	.LVL98:
+ 358:86rksd.c      ****   if(fs_tell()) return;
+ 1071               		.loc 1 358 0
+ 1072 04ba 0E94 0000 		call fs_tell
+ 1073               	.LVL99:
+ 1074 04be 8111      		cpse r24,__zero_reg__
+ 1075 04c0 00C0      		rjmp .L75
+ 359:86rksd.c      ****   s -= fs_tmp;
+ 1076               		.loc 1 359 0
+ 1077 04c2 8091 0000 		lds r24,fs_tmp
+ 1078 04c6 9091 0000 		lds r25,fs_tmp+1
+ 1079 04ca A091 0000 		lds r26,fs_tmp+2
+ 1080 04ce B091 0000 		lds r27,fs_tmp+3
+ 1081 04d2 A701      		movw r20,r14
+ 1082 04d4 9601      		movw r18,r12
+ 1083 04d6 281B      		sub r18,r24
+ 1084 04d8 390B      		sbc r19,r25
+ 1085 04da 4A0B      		sbc r20,r26
+ 1086 04dc 5B0B      		sbc r21,r27
+ 1087 04de DA01      		movw r26,r20
+ 1088 04e0 C901      		movw r24,r18
+ 1089               	.LVL100:
+ 360:86rksd.c      ****                     
+ 361:86rksd.c      ****   if(readLength > s)
+ 1090               		.loc 1 361 0
+ 1091 04e2 4091 0000 		lds r20,readLength
+ 1092 04e6 5091 0000 		lds r21,readLength+1
+ 1093 04ea 60E0      		ldi r22,0
+ 1094 04ec 70E0      		ldi r23,0
+ 1095 04ee 8417      		cp r24,r20
+ 1096 04f0 9507      		cpc r25,r21
+ 1097 04f2 A607      		cpc r26,r22
+ 1098 04f4 B707      		cpc r27,r23
+ 1099 04f6 00F4      		brsh .L79
+ 362:86rksd.c      ****     readLength = (WORD)s;
+ 1100               		.loc 1 362 0
+ 1101 04f8 9093 0000 		sts readLength+1,r25
+ 1102 04fc 8093 0000 		sts readLength,r24
+ 1103               	.L79:
+ 363:86rksd.c      **** 
+ 364:86rksd.c      ****   // Отправляем все блоки файла
+ 365:86rksd.c      ****   readInt(/*rks*/0);
+ 1104               		.loc 1 365 0
+ 1105 0500 80E0      		ldi r24,0
+ 1106               	/* epilogue start */
+ 366:86rksd.c      **** }
+ 1107               		.loc 1 366 0
+ 1108 0502 FF90      		pop r15
+ 1109 0504 EF90      		pop r14
+ 1110 0506 DF90      		pop r13
+ 1111 0508 CF90      		pop r12
+ 365:86rksd.c      ****   readInt(/*rks*/0);
+ 1112               		.loc 1 365 0
+ 1113 050a 0C94 0000 		jmp readInt
+ 1114               	.LVL101:
+ 1115               	.L75:
+ 1116               	/* epilogue start */
+ 1117               		.loc 1 366 0
+ 1118 050e FF90      		pop r15
+ 1119 0510 EF90      		pop r14
+ 1120 0512 DF90      		pop r13
+ 1121 0514 CF90      		pop r12
+ 1122 0516 0895      		ret
+ 1123               		.cfi_endproc
+ 1124               	.LFE20:
+ 1126               	.global	cmd_write
+ 1128               	cmd_write:
+ 1129               	.LFB21:
+ 367:86rksd.c      **** 
+ 368:86rksd.c      **** /*******************************************************************************
+ 369:86rksd.c      **** * Записать данные в файл                                                       *
+ 370:86rksd.c      **** *******************************************************************************/
+ 371:86rksd.c      **** 
+ 372:86rksd.c      **** void cmd_write(void) {
+ 1130               		.loc 1 372 0
+ 1131               		.cfi_startproc
+ 1132               	/* prologue: function */
+ 1133               	/* frame size = 0 */
+ 1134               	/* stack size = 0 */
+ 1135               	.L__stack_usage = 0
+ 373:86rksd.c      ****   // Аргументы
+ 374:86rksd.c      ****   recvBin((uint8_t*)&fs_wtotal, 2); 
+ 1136               		.loc 1 374 0
+ 1137 0518 62E0      		ldi r22,lo8(2)
+ 1138 051a 70E0      		ldi r23,0
+ 1139 051c 80E0      		ldi r24,lo8(fs_wtotal)
+ 1140 051e 90E0      		ldi r25,hi8(fs_wtotal)
+ 1141 0520 0E94 0000 		call recvBin
+ 1142               	.LVL102:
+ 375:86rksd.c      **** 
+ 376:86rksd.c      ****   // Ответ
+ 377:86rksd.c      ****   sendStart(ERR_WAIT);
+ 1143               		.loc 1 377 0
+ 1144 0524 81E4      		ldi r24,lo8(65)
+ 1145 0526 0E94 0000 		call sendStart
+ 1146               	.LVL103:
+ 378:86rksd.c      ****            
+ 379:86rksd.c      ****   // Конец файла
+ 380:86rksd.c      ****   if(fs_wtotal==0) {
+ 1147               		.loc 1 380 0
+ 1148 052a 8091 0000 		lds r24,fs_wtotal
+ 1149 052e 9091 0000 		lds r25,fs_wtotal+1
+ 1150 0532 892B      		or r24,r25
+ 1151 0534 01F4      		brne .L87
+ 381:86rksd.c      ****     fs_write_eof();
+ 1152               		.loc 1 381 0
+ 1153 0536 0E94 0000 		call fs_write_eof
+ 1154               	.LVL104:
+ 1155 053a 00C0      		rjmp .L88
+ 1156               	.L89:
+ 382:86rksd.c      ****     lastError = ERR_OK_CMD;
+ 383:86rksd.c      ****     return;
+ 384:86rksd.c      ****   }
+ 385:86rksd.c      ****   
+ 386:86rksd.c      ****   // Запись данных
+ 387:86rksd.c      ****   do {
+ 388:86rksd.c      ****     if(fs_write_start()) return;
+ 389:86rksd.c      **** 
+ 390:86rksd.c      ****     // Принимаем от компьюетра блок данных
+ 391:86rksd.c      ****     send(ERR_OK_WRITE);
+ 1157               		.loc 1 391 0
+ 1158 053c 86E4      		ldi r24,lo8(70)
+ 1159 053e 0E94 0000 		call send
+ 1160               	.LVL105:
+ 392:86rksd.c      ****     sendBin((uint8_t*)&fs_file_wlen, 2);
+ 1161               		.loc 1 392 0
+ 1162 0542 62E0      		ldi r22,lo8(2)
+ 1163 0544 70E0      		ldi r23,0
+ 1164 0546 80E0      		ldi r24,lo8(fs_tmp)
+ 1165 0548 90E0      		ldi r25,hi8(fs_tmp)
+ 1166 054a 0E94 0000 		call sendBin
+ 1167               	.LVL106:
+ 393:86rksd.c      ****     recvStart();    
+ 1168               		.loc 1 393 0
+ 1169 054e 0E94 0000 		call recvStart
+ 1170               	.LVL107:
+ 394:86rksd.c      ****     recvBin(fs_file_wbuf, fs_file_wlen);
+ 1171               		.loc 1 394 0
+ 1172 0552 6091 0000 		lds r22,fs_tmp
+ 1173 0556 7091 0000 		lds r23,fs_tmp+1
+ 1174 055a 8091 0000 		lds r24,fs_tmp+2
+ 1175 055e 9091 0000 		lds r25,fs_tmp+2+1
+ 1176 0562 8050      		subi r24,lo8(-(buf))
+ 1177 0564 9040      		sbci r25,hi8(-(buf))
+ 1178 0566 0E94 0000 		call recvBin
+ 1179               	.LVL108:
+ 395:86rksd.c      ****     sendStart(ERR_WAIT);
+ 1180               		.loc 1 395 0
+ 1181 056a 81E4      		ldi r24,lo8(65)
+ 1182 056c 0E94 0000 		call sendStart
+ 1183               	.LVL109:
+ 396:86rksd.c      **** 
+ 397:86rksd.c      ****     if(fs_write_end()) return;
+ 1184               		.loc 1 397 0
+ 1185 0570 0E94 0000 		call fs_write_end
+ 1186               	.LVL110:
+ 1187 0574 8111      		cpse r24,__zero_reg__
+ 1188 0576 00C0      		rjmp .L80
+ 398:86rksd.c      ****   } while(fs_wtotal);
+ 1189               		.loc 1 398 0
+ 1190 0578 8091 0000 		lds r24,fs_wtotal
+ 1191 057c 9091 0000 		lds r25,fs_wtotal+1
+ 1192 0580 892B      		or r24,r25
+ 1193 0582 01F0      		breq .L88
+ 1194               	.L87:
+ 388:86rksd.c      ****     if(fs_write_start()) return;
+ 1195               		.loc 1 388 0
+ 1196 0584 0E94 0000 		call fs_write_start
+ 1197               	.LVL111:
+ 1198 0588 8823      		tst r24
+ 1199 058a 01F0      		breq .L89
+ 1200 058c 00C0      		rjmp .L80
+ 1201               	.L88:
+ 399:86rksd.c      **** 
+ 400:86rksd.c      ****   lastError = ERR_OK_CMD;
+ 1202               		.loc 1 400 0
+ 1203 058e 83E4      		ldi r24,lo8(67)
+ 1204 0590 8093 0000 		sts lastError,r24
+ 1205               	.L80:
+ 1206 0594 0895      		ret
+ 1207               		.cfi_endproc
+ 1208               	.LFE21:
+ 1210               	.global	error
+ 1212               	error:
+ 1213               	.LFB22:
+ 401:86rksd.c      **** }
+ 402:86rksd.c      **** 
+ 403:86rksd.c      **** /*******************************************************************************
+ 404:86rksd.c      **** * Главная процедура                                                            *
+ 405:86rksd.c      **** *******************************************************************************/
+ 406:86rksd.c      **** 
+ 407:86rksd.c      **** void error(void) {
+ 1214               		.loc 1 407 0
+ 1215               		.cfi_startproc
+ 1216               	/* prologue: function */
+ 1217               	/* frame size = 0 */
+ 1218               	/* stack size = 0 */
+ 1219               	.L__stack_usage = 0
+ 1220               	.L91:
+ 408:86rksd.c      ****   for(;;) {
+ 409:86rksd.c      ****     PORTB |= _BV(PB0);
+ 1221               		.loc 1 409 0 discriminator 1
+ 1222 0596 289A      		sbi 0x5,0
+ 1223               	.LVL112:
+ 1224               	.LBB20:
+ 1225               	.LBB21:
+ 1226               		.file 2 "/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h"
+   1:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+   6:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+   9:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  12:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      distribution.
+  16:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  17:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  21:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  33:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  35:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  38:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  41:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  42:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  46:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /** \file */
+  47:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \code
+  49:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \endcode
+  53:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  54:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     used.
+  58:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  59:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  68:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  77:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  81:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** */
+  82:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  83:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  87:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  88:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  93:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  94:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  97:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  98:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+ 103:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 104:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /**
+ 105:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 107:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 109:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 112:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 114:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 120:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 125:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 129:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 132:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 140:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****  */
+ 141:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** void
+ 142:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** {
+ 144:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 152:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 155:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 158:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#else
+ 159:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#endif
+ 162:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 163:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 1227               		.loc 2 163 0 discriminator 1
+ 1228 0598 2FEF      		ldi r18,lo8(159999)
+ 1229 059a 80E7      		ldi r24,hi8(159999)
+ 1230 059c 92E0      		ldi r25,hlo8(159999)
+ 1231 059e 2150      		1: subi r18,1
+ 1232 05a0 8040      		sbci r24,0
+ 1233 05a2 9040      		sbci r25,0
+ 1234 05a4 01F4      		brne 1b
+ 1235 05a6 00C0      		rjmp .
+ 1236 05a8 0000      		nop
+ 1237               	.LBE21:
+ 1238               	.LBE20:
+ 410:86rksd.c      ****     _delay_ms(100);
+ 411:86rksd.c      ****     PORTB &=~_BV(PB0);
+ 1239               		.loc 1 411 0 discriminator 1
+ 1240 05aa 2898      		cbi 0x5,0
+ 1241               	.LVL113:
+ 1242               	.LBB22:
+ 1243               	.LBB23:
+ 1244               		.loc 2 163 0 discriminator 1
+ 1245 05ac 2FEF      		ldi r18,lo8(159999)
+ 1246 05ae 80E7      		ldi r24,hi8(159999)
+ 1247 05b0 92E0      		ldi r25,hlo8(159999)
+ 1248 05b2 2150      		1: subi r18,1
+ 1249 05b4 8040      		sbci r24,0
+ 1250 05b6 9040      		sbci r25,0
+ 1251 05b8 01F4      		brne 1b
+ 1252 05ba 00C0      		rjmp .
+ 1253 05bc 0000      		nop
+ 1254 05be 00C0      		rjmp .L91
+ 1255               	.LBE23:
+ 1256               	.LBE22:
+ 1257               		.cfi_endproc
+ 1258               	.LFE22:
+ 1260               		.section	.text.startup,"ax",@progbits
+ 1261               	.global	main
+ 1263               	main:
+ 1264               	.LFB23:
+ 412:86rksd.c      ****     _delay_ms(100);
+ 413:86rksd.c      ****   }
+ 414:86rksd.c      **** }
+ 415:86rksd.c      **** 
+ 416:86rksd.c      **** int main(void) {
+ 1265               		.loc 1 416 0
+ 1266               		.cfi_startproc
+ 1267               	/* prologue: function */
+ 1268               	/* frame size = 0 */
+ 1269               	/* stack size = 0 */
+ 1270               	.L__stack_usage = 0
+ 417:86rksd.c      **** 
+ 418:86rksd.c      ****   uint8_t c;
+ 419:86rksd.c      ****     
+ 420:86rksd.c      ****   DATA_OUT            // Шина данных (DDRD)
+ 1271               		.loc 1 420 0
+ 1272 0000 8FEF      		ldi r24,lo8(-1)
+ 1273 0002 8AB9      		out 0xa,r24
+ 421:86rksd.c      ****   DDRC  = 0b00000000; // Шина адреса
+ 1274               		.loc 1 421 0
+ 1275 0004 17B8      		out 0x7,__zero_reg__
+ 422:86rksd.c      ****   DDRB  = 0b00101101; // Шина адреса, карта и светодиод
+ 1276               		.loc 1 422 0
+ 1277 0006 8DE2      		ldi r24,lo8(45)
+ 1278 0008 84B9      		out 0x4,r24
+ 423:86rksd.c      ****   PORTB = 0b00010001; // Подтягивающий резистор на MISO и светодио�
+ 1279               		.loc 1 423 0
+ 1280 000a 81E1      		ldi r24,lo8(17)
+ 1281 000c 85B9      		out 0x5,r24
+ 1282               	.LVL114:
+ 1283               	.LBB24:
+ 1284               	.LBB25:
+ 1285               		.loc 2 163 0
+ 1286 000e 2FEF      		ldi r18,lo8(159999)
+ 1287 0010 80E7      		ldi r24,hi8(159999)
+ 1288 0012 92E0      		ldi r25,hlo8(159999)
+ 1289 0014 2150      		1: subi r18,1
+ 1290 0016 8040      		sbci r24,0
+ 1291 0018 9040      		sbci r25,0
+ 1292 001a 01F4      		brne 1b
+ 1293 001c 00C0      		rjmp .
+ 1294 001e 0000      		nop
+ 1295               	.LBE25:
+ 1296               	.LBE24:
+ 424:86rksd.c      **** 
+ 425:86rksd.c      ****   // Пауза, пока не стабилизируется питание
+ 426:86rksd.c      ****   _delay_ms(100);
+ 427:86rksd.c      **** 
+ 428:86rksd.c      **** //  while(1) {
+ 429:86rksd.c      **** //     error();
+ 430:86rksd.c      **** //  }
+ 431:86rksd.c      **** 
+ 432:86rksd.c      ****   // Запуск файловой системы
+ 433:86rksd.c      ****   if(fs_init()) error();
+ 1297               		.loc 1 433 0
+ 1298 0020 0E94 0000 		call fs_init
+ 1299               	.LVL115:
+ 1300 0024 8111      		cpse r24,__zero_reg__
+ 1301               	.L94:
+ 1302               		.loc 1 433 0 is_stmt 0 discriminator 1
+ 1303 0026 0E94 0000 		call error
+ 1304               	.LVL116:
+ 1305               	.L93:
+ 434:86rksd.c      ****   strcpy_P((char*)buf, PSTR("boot/boot.rk"));
+ 1306               		.loc 1 434 0 is_stmt 1
+ 1307 002a 60E0      		ldi r22,lo8(__c.2061)
+ 1308 002c 70E0      		ldi r23,hi8(__c.2061)
+ 1309 002e 80E0      		ldi r24,lo8(buf)
+ 1310 0030 90E0      		ldi r25,hi8(buf)
+ 1311 0032 0E94 0000 		call strcpy_P
+ 1312               	.LVL117:
+ 435:86rksd.c      ****   if(fs_open()) error();
+ 1313               		.loc 1 435 0
+ 1314 0036 0E94 0000 		call fs_open
+ 1315               	.LVL118:
+ 1316 003a 8111      		cpse r24,__zero_reg__
+ 1317 003c 00C0      		rjmp .L94
+ 436:86rksd.c      ****   if(fs_getfilesize()) error();
+ 1318               		.loc 1 436 0
+ 1319 003e 0E94 0000 		call fs_getfilesize
+ 1320               	.LVL119:
+ 1321 0042 8111      		cpse r24,__zero_reg__
+ 1322 0044 00C0      		rjmp .L94
+ 437:86rksd.c      ****   if(fs_tmp < 7) error();
+ 1323               		.loc 1 437 0
+ 1324 0046 6091 0000 		lds r22,fs_tmp
+ 1325 004a 7091 0000 		lds r23,fs_tmp+1
+ 1326 004e 8091 0000 		lds r24,fs_tmp+2
+ 1327 0052 9091 0000 		lds r25,fs_tmp+3
+ 1328 0056 8B01      		movw r16,r22
+ 1329 0058 9C01      		movw r18,r24
+ 1330 005a 0750      		subi r16,7
+ 1331 005c 1109      		sbc r17,__zero_reg__
+ 1332 005e 2109      		sbc r18,__zero_reg__
+ 1333 0060 3109      		sbc r19,__zero_reg__
+ 1334 0062 0A37      		cpi r16,122
+ 1335 0064 1105      		cpc r17,__zero_reg__
+ 1336 0066 2105      		cpc r18,__zero_reg__
+ 1337 0068 3105      		cpc r19,__zero_reg__
+ 1338 006a 00F4      		brsh .L94
+ 438:86rksd.c      ****   if(fs_tmp > 128) error();
+ 439:86rksd.c      ****   if(fs_read0(rom, (WORD)fs_tmp)) error();  
+ 1339               		.loc 1 439 0
+ 1340 006c 80E0      		ldi r24,lo8(rom)
+ 1341 006e 90E0      		ldi r25,hi8(rom)
+ 1342 0070 0E94 0000 		call fs_read0
+ 1343               	.LVL120:
+ 1344 0074 8111      		cpse r24,__zero_reg__
+ 1345 0076 00C0      		rjmp .L94
+ 440:86rksd.c      ****                     
+ 441:86rksd.c      ****   // Гасим светодиод
+ 442:86rksd.c      ****   PORTB |= _BV(PB0);
+ 1346               		.loc 1 442 0
+ 1347 0078 289A      		sbi 0x5,0
+ 443:86rksd.c      ****   
+ 444:86rksd.c      ****   while(1) {
+ 445:86rksd.c      **** 
+ 446:86rksd.c      ****     // Эмуляция ПЗУ
+ 447:86rksd.c      ****     RomEmu();
+ 448:86rksd.c      **** 
+ 449:86rksd.c      ****     // Зажигаем светодиод
+ 450:86rksd.c      ****     PORTB |= _BV(PB0);
+ 451:86rksd.c      **** 
+ 452:86rksd.c      ****     // Проверяем наличие карты
+ 453:86rksd.c      ****     sendStart(ERR_START);
+ 454:86rksd.c      ****     send(ERR_WAIT);
+ 455:86rksd.c      ****     if(fs_check()) {
+ 456:86rksd.c      ****       send(ERR_DISK_ERR);
+ 457:86rksd.c      ****     } else {
+ 458:86rksd.c      ****       send(ERR_OK_DISK);
+ 459:86rksd.c      ****       recvStart();
+ 460:86rksd.c      ****       c = wrecv();
+ 461:86rksd.c      ****       
+ 462:86rksd.c      ****       // Сбрасываем ошибку
+ 463:86rksd.c      ****       lastError = 0;
+ 464:86rksd.c      ****     
+ 465:86rksd.c      ****       // Принимаем аргументы 
+ 466:86rksd.c      ****       switch(c) {
+ 467:86rksd.c      ****         case 0:  cmd_boot();         break; 
+ 468:86rksd.c      ****         case 1:  cmd_ver();          break;
+ 469:86rksd.c      ****         case 2:  cmd_exec();         break; 
+ 470:86rksd.c      ****         case 3:  cmd_find();         break;
+ 471:86rksd.c      ****         case 4:  cmd_open();         break;     
+ 472:86rksd.c      ****         case 5:  cmd_lseek();        break;     
+ 473:86rksd.c      ****         case 6:  cmd_read();         break;     
+ 474:86rksd.c      ****         case 7:  cmd_write();        break; 
+ 475:86rksd.c      ****         case 8:  cmd_move();         break;
+ 476:86rksd.c      ****         default: lastError = ERR_INVALID_COMMAND;      
+ 1348               		.loc 1 476 0
+ 1349 007a 0CE0      		ldi r16,lo8(12)
+ 477:86rksd.c      ****       }
+ 478:86rksd.c      ****     
+ 479:86rksd.c      ****       // Вывод ошибки
+ 480:86rksd.c      ****       if(lastError) sendStart(lastError);
+ 481:86rksd.c      ****     }
+ 482:86rksd.c      **** 
+ 483:86rksd.c      ****     // Порт рабоатет на выход
+ 484:86rksd.c      ****     wait();
+ 485:86rksd.c      ****     DATA_OUT
+ 1350               		.loc 1 485 0
+ 1351 007c 1FEF      		ldi r17,lo8(-1)
+ 1352               	.L109:
+ 447:86rksd.c      ****     RomEmu();
+ 1353               		.loc 1 447 0
+ 1354 007e 0E94 0000 		call RomEmu
+ 1355               	.LVL121:
+ 450:86rksd.c      ****     PORTB |= _BV(PB0);
+ 1356               		.loc 1 450 0
+ 1357 0082 289A      		sbi 0x5,0
+ 453:86rksd.c      ****     sendStart(ERR_START);
+ 1358               		.loc 1 453 0
+ 1359 0084 80E4      		ldi r24,lo8(64)
+ 1360 0086 0E94 0000 		call sendStart
+ 1361               	.LVL122:
+ 454:86rksd.c      ****     send(ERR_WAIT);
+ 1362               		.loc 1 454 0
+ 1363 008a 81E4      		ldi r24,lo8(65)
+ 1364 008c 0E94 0000 		call send
+ 1365               	.LVL123:
+ 455:86rksd.c      ****     if(fs_check()) {
+ 1366               		.loc 1 455 0
+ 1367 0090 0E94 0000 		call fs_check
+ 1368               	.LVL124:
+ 1369 0094 8823      		tst r24
+ 1370 0096 01F0      		breq .L95
+ 456:86rksd.c      ****       send(ERR_DISK_ERR);
+ 1371               		.loc 1 456 0
+ 1372 0098 82E0      		ldi r24,lo8(2)
+ 1373 009a 0E94 0000 		call send
+ 1374               	.LVL125:
+ 1375 009e 00C0      		rjmp .L96
+ 1376               	.L95:
+ 458:86rksd.c      ****       send(ERR_OK_DISK);
+ 1377               		.loc 1 458 0
+ 1378 00a0 82E4      		ldi r24,lo8(66)
+ 1379 00a2 0E94 0000 		call send
+ 1380               	.LVL126:
+ 459:86rksd.c      ****       recvStart();
+ 1381               		.loc 1 459 0
+ 1382 00a6 0E94 0000 		call recvStart
+ 1383               	.LVL127:
+ 460:86rksd.c      ****       c = wrecv();
+ 1384               		.loc 1 460 0
+ 1385 00aa 0E94 0000 		call wrecv
+ 1386               	.LVL128:
+ 463:86rksd.c      ****       lastError = 0;
+ 1387               		.loc 1 463 0
+ 1388 00ae 1092 0000 		sts lastError,__zero_reg__
+ 466:86rksd.c      ****       switch(c) {
+ 1389               		.loc 1 466 0
+ 1390 00b2 90E0      		ldi r25,0
+ 1391 00b4 8930      		cpi r24,9
+ 1392 00b6 9105      		cpc r25,__zero_reg__
+ 1393 00b8 00F4      		brsh .L97
+ 1394 00ba FC01      		movw r30,r24
+ 1395 00bc E050      		subi r30,lo8(-(gs(.L99)))
+ 1396 00be F040      		sbci r31,hi8(-(gs(.L99)))
+ 1397 00c0 0C94 0000 		jmp __tablejump2__
+ 1398               	.LVL129:
+ 1399               		.section	.progmem.gcc_sw_table,"a",@progbits
+ 1400               		.p2align	1
+ 1401               	.L99:
+ 1402 0000 0000      		.word gs(.L98)
+ 1403 0002 0000      		.word gs(.L100)
+ 1404 0004 0000      		.word gs(.L101)
+ 1405 0006 0000      		.word gs(.L102)
+ 1406 0008 0000      		.word gs(.L103)
+ 1407 000a 0000      		.word gs(.L104)
+ 1408 000c 0000      		.word gs(.L105)
+ 1409 000e 0000      		.word gs(.L106)
+ 1410 0010 0000      		.word gs(.L107)
+ 1411               		.section	.text.startup
+ 1412               	.L98:
+ 467:86rksd.c      ****         case 0:  cmd_boot();         break; 
+ 1413               		.loc 1 467 0
+ 1414 00c4 0E94 0000 		call cmd_boot
+ 1415               	.LVL130:
+ 1416 00c8 00C0      		rjmp .L108
+ 1417               	.L100:
+ 468:86rksd.c      ****         case 1:  cmd_ver();          break;
+ 1418               		.loc 1 468 0
+ 1419 00ca 0E94 0000 		call cmd_ver
+ 1420               	.LVL131:
+ 1421 00ce 00C0      		rjmp .L108
+ 1422               	.L101:
+ 469:86rksd.c      ****         case 2:  cmd_exec();         break; 
+ 1423               		.loc 1 469 0
+ 1424 00d0 0E94 0000 		call cmd_exec
+ 1425               	.LVL132:
+ 1426 00d4 00C0      		rjmp .L108
+ 1427               	.L102:
+ 470:86rksd.c      ****         case 3:  cmd_find();         break;
+ 1428               		.loc 1 470 0
+ 1429 00d6 0E94 0000 		call cmd_find
+ 1430               	.LVL133:
+ 1431 00da 00C0      		rjmp .L108
+ 1432               	.L103:
+ 471:86rksd.c      ****         case 4:  cmd_open();         break;     
+ 1433               		.loc 1 471 0
+ 1434 00dc 0E94 0000 		call cmd_open
+ 1435               	.LVL134:
+ 1436 00e0 00C0      		rjmp .L108
+ 1437               	.L104:
+ 472:86rksd.c      ****         case 5:  cmd_lseek();        break;     
+ 1438               		.loc 1 472 0
+ 1439 00e2 0E94 0000 		call cmd_lseek
+ 1440               	.LVL135:
+ 1441 00e6 00C0      		rjmp .L108
+ 1442               	.L105:
+ 473:86rksd.c      ****         case 6:  cmd_read();         break;     
+ 1443               		.loc 1 473 0
+ 1444 00e8 0E94 0000 		call cmd_read
+ 1445               	.LVL136:
+ 1446 00ec 00C0      		rjmp .L108
+ 1447               	.L106:
+ 474:86rksd.c      ****         case 7:  cmd_write();        break; 
+ 1448               		.loc 1 474 0
+ 1449 00ee 0E94 0000 		call cmd_write
+ 1450               	.LVL137:
+ 1451 00f2 00C0      		rjmp .L108
+ 1452               	.L107:
+ 475:86rksd.c      ****         case 8:  cmd_move();         break;
+ 1453               		.loc 1 475 0
+ 1454 00f4 0E94 0000 		call cmd_move
+ 1455               	.LVL138:
+ 1456 00f8 00C0      		rjmp .L108
+ 1457               	.LVL139:
+ 1458               	.L97:
+ 476:86rksd.c      ****         default: lastError = ERR_INVALID_COMMAND;      
+ 1459               		.loc 1 476 0
+ 1460 00fa 0093 0000 		sts lastError,r16
+ 1461               	.LVL140:
+ 1462               	.L108:
+ 480:86rksd.c      ****       if(lastError) sendStart(lastError);
+ 1463               		.loc 1 480 0
+ 1464 00fe 8091 0000 		lds r24,lastError
+ 1465 0102 8111      		cpse r24,__zero_reg__
+ 480:86rksd.c      ****       if(lastError) sendStart(lastError);
+ 1466               		.loc 1 480 0 is_stmt 0 discriminator 1
+ 1467 0104 0E94 0000 		call sendStart
+ 1468               	.LVL141:
+ 1469               	.L96:
+ 484:86rksd.c      ****     wait();
+ 1470               		.loc 1 484 0 is_stmt 1
+ 1471 0108 0E94 0000 		call wait
+ 1472               	.LVL142:
+ 1473               		.loc 1 485 0
+ 1474 010c 1AB9      		out 0xa,r17
+ 486:86rksd.c      ****     
+ 487:86rksd.c      ****     // Гасим светодиод
+ 488:86rksd.c      ****     PORTB &=~_BV(PB0);
+ 1475               		.loc 1 488 0
+ 1476 010e 2898      		cbi 0x5,0
+ 1477               	.LVL143:
+ 1478               	.LBB26:
+ 1479               	.LBB27:
+ 1480               		.loc 2 163 0
+ 1481 0110 2FEF      		ldi r18,lo8(799999)
+ 1482 0112 84E3      		ldi r24,hi8(799999)
+ 1483 0114 9CE0      		ldi r25,hlo8(799999)
+ 1484 0116 2150      		1: subi r18,1
+ 1485 0118 8040      		sbci r24,0
+ 1486 011a 9040      		sbci r25,0
+ 1487 011c 01F4      		brne 1b
+ 1488 011e 00C0      		rjmp .
+ 1489 0120 0000      		nop
+ 1490 0122 00C0      		rjmp .L109
+ 1491               	.LBE27:
+ 1492               	.LBE26:
+ 1493               		.cfi_endproc
+ 1494               	.LFE23:
+ 1496               		.section	.progmem.data,"a",@progbits
+ 1499               	__c.2061:
+ 1500 0000 626F 6F74 		.string	"boot/boot.rk"
+ 1500      2F62 6F6F 
+ 1500      742E 726B 
+ 1500      00
+ 1503               	__c.2004:
+ 1504 000d 626F 6F74 		.string	"boot/sdbios.rk"
+ 1504      2F73 6462 
+ 1504      696F 732E 
+ 1504      726B 00
+ 1507               	__c.1999:
+ 1508 001c 5631 2E31 		.string	"V1.1 RK86-SRAM  "
+ 1508      2052 4B38 
+ 1508      362D 5352 
+ 1508      414D 2020 
+ 1508      00
+ 1509               		.comm	readLength,2,1
+ 1510               		.comm	rom,128,1
+ 1511               		.comm	buf,512,1
+ 1512               		.text
+ 1513               	.Letext0:
+ 1514               		.file 3 "/usr/local/CrossPack-AVR-20131216/avr/include/stdint.h"
+ 1515               		.file 4 "common.h"
+ 1516               		.file 5 "fs.h"
+ 1517               		.file 6 "proto.h"
+ 1518               		.file 7 "/usr/local/CrossPack-AVR-20131216/avr/include/avr/pgmspace.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 86rksd.c
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:2      *ABS*:0000003e __SP_H__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:3      *ABS*:0000003d __SP_L__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:4      *ABS*:0000003f __SREG__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:5      *ABS*:00000000 __tmp_reg__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:6      *ABS*:00000001 __zero_reg__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:12     .text:00000000 recvBin
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:69     .text:00000028 recvString
+                            *COM*:00000200 buf
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:130    .text:00000056 sendBin
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:186    .text:0000007e sendBinf
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:267    .text:000000b4 readInt
+                            *COM*:00000002 readLength
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:478    .text:000001e0 cmd_ver
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1507   .progmem.data:0000001c __c.1999
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:501    .text:000001f0 cmd_boot_exec
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1503   .progmem.data:0000000d __c.2004
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:576    .text:0000026a cmd_boot
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:598    .text:00000278 cmd_exec
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:627    .text:00000290 cmd_find
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:784    .text:00000374 cmd_open
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:863    .text:000003c8 cmd_move
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:918    .text:00000408 cmd_lseek
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1025   .text:00000488 cmd_read
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1128   .text:00000518 cmd_write
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1212   .text:00000596 error
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1263   .text.startup:00000000 main
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccShRPqD.s:1499   .progmem.data:00000000 __c.2061
+                            *COM*:00000080 rom
+
+UNDEFINED SYMBOLS
+wrecv
+lastError
+send
+fs_tell
+fs_tmp
+fs_read0
+sendStart
+strcpy_P
+fs_open
+fs_getfilesize
+fs_opendir
+fs_readdir
+fs_swap
+fs_delete
+fs_open0
+recvStart
+fs_move0
+fs_gettotal
+fs_getfree
+fs_lseek
+fs_wtotal
+fs_write_eof
+fs_write_end
+fs_write_start
+fs_init
+RomEmu
+fs_check
+__tablejump2__
+wait
+__do_clear_bss

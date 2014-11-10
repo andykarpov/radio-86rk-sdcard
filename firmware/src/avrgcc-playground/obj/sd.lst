@@ -1,0 +1,1182 @@
+   1               		.file	"sd.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  11               	spi_transmit:
+  12               	.LFB6:
+  13               		.file 1 "sd.c"
+   1:sd.c          **** /*
+   2:sd.c          **** It is an open source software to implement SD routines to
+   3:sd.c          **** small embedded systems. This is a free software and is opened for education,
+   4:sd.c          **** research and commercial developments under license policy of following trems.
+   5:sd.c          **** 
+   6:sd.c          **** (C) 2013 vinxru (aleksey.f.morozov@gmail.com)
+   7:sd.c          **** 
+   8:sd.c          **** It is a free software and there is NO WARRANTY.
+   9:sd.c          **** No restriction on use. You can use, modify and redistribute it for
+  10:sd.c          **** personal, non-profit or commercial use UNDER YOUR RESPONSIBILITY.
+  11:sd.c          **** Redistributions of source code must retain the above copyright notice.
+  12:sd.c          **** 
+  13:sd.c          **** Version 0.99 5-05-2013
+  14:sd.c          **** */
+  15:sd.c          **** 
+  16:sd.c          **** #include "common.h"
+  17:sd.c          **** #include <avr/io.h>
+  18:sd.c          **** #include <util/delay.h>
+  19:sd.c          **** #include "sd.h"
+  20:sd.c          **** #include "fs.h"
+  21:sd.c          **** 
+  22:sd.c          **** uint8_t sd_sdhc; /* Используется SDHC карта */
+  23:sd.c          **** 
+  24:sd.c          **** /**************************************************************************
+  25:sd.c          **** *  Протокол SPI для ATMega8                                               *
+  26:sd.c          **** *  Может отличаться для разных МК.                                       
+  27:sd.c          **** **************************************************************************/
+  28:sd.c          **** 
+  29:sd.c          **** /* Куда подключена линия CS карты */
+  30:sd.c          **** #define SD_CS_ENABLE    PORTB &= ~0x04;
+  31:sd.c          **** #define SD_CS_DISABLE   PORTB |= 0x04;
+  32:sd.c          **** 
+  33:sd.c          **** /* Совместимость с разными версиями CodeVisionAVR */
+  34:sd.c          **** #ifndef SPI2X
+  35:sd.c          **** #define SPI2X 0
+  36:sd.c          **** #endif
+  37:sd.c          **** 
+  38:sd.c          **** #define SPI_INIT      { SPCR = 0x52; SPSR = 0x00; }    
+  39:sd.c          **** #define SPI_HIGHSPEED { SPCR = 0x50; SPSR |= (1<<SPI2X); _delay_ms(1); }
+  40:sd.c          **** 
+  41:sd.c          **** static void spi_transmit(uint8_t data) {
+  14               		.loc 1 41 0
+  15               		.cfi_startproc
+  16               	.LVL0:
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  42:sd.c          ****   SPDR = data;  
+  21               		.loc 1 42 0
+  22 0000 8EBD      		out 0x2e,r24
+  23               	.L3:
+  43:sd.c          ****   while((SPSR & 0x80) == 0);
+  24               		.loc 1 43 0 discriminator 1
+  25 0002 0DB4      		in __tmp_reg__,0x2d
+  26 0004 07FE      		sbrs __tmp_reg__,7
+  27 0006 00C0      		rjmp .L3
+  28               	/* epilogue start */
+  44:sd.c          **** }
+  29               		.loc 1 44 0
+  30 0008 0895      		ret
+  31               		.cfi_endproc
+  32               	.LFE6:
+  35               	spi_receive:
+  36               	.LFB7:
+  45:sd.c          **** 
+  46:sd.c          **** static uint8_t spi_receive(void) {
+  37               		.loc 1 46 0
+  38               		.cfi_startproc
+  39               	/* prologue: function */
+  40               	/* frame size = 0 */
+  41               	/* stack size = 0 */
+  42               	.L__stack_usage = 0
+  47:sd.c          ****   SPDR = 0xFF;
+  43               		.loc 1 47 0
+  44 000a 8FEF      		ldi r24,lo8(-1)
+  45 000c 8EBD      		out 0x2e,r24
+  46               	.L7:
+  48:sd.c          ****   while((SPSR & 0x80) == 0);
+  47               		.loc 1 48 0 discriminator 1
+  48 000e 0DB4      		in __tmp_reg__,0x2d
+  49 0010 07FE      		sbrs __tmp_reg__,7
+  50 0012 00C0      		rjmp .L7
+  49:sd.c          ****   return SPDR;
+  51               		.loc 1 49 0
+  52 0014 8EB5      		in r24,0x2e
+  50:sd.c          **** }
+  53               		.loc 1 50 0
+  54 0016 0895      		ret
+  55               		.cfi_endproc
+  56               	.LFE7:
+  59               	sd_sendCommand:
+  60               	.LFB8:
+  51:sd.c          **** 
+  52:sd.c          **** /**************************************************************************
+  53:sd.c          **** *  Отправка команды                                                       *
+  54:sd.c          **** **************************************************************************/
+  55:sd.c          **** 
+  56:sd.c          **** /* Используемые каманды SD карты */
+  57:sd.c          **** 
+  58:sd.c          **** #define GO_IDLE_STATE      (0x40 | 0 )
+  59:sd.c          **** #define SEND_IF_COND       (0x40 | 8 )
+  60:sd.c          **** #define READ_SINGLE_BLOCK  (0x40 | 17)
+  61:sd.c          **** #define WRITE_SINGLE_BLOCK (0x40 | 24)
+  62:sd.c          **** #define SD_SEND_OP_COND    (0x40 | 41)
+  63:sd.c          **** #define APP_CMD            (0x40 | 55)
+  64:sd.c          **** #define READ_OCR           (0x40 | 58)
+  65:sd.c          **** 
+  66:sd.c          **** static uint8_t sd_sendCommand(uint8_t cmd, unsigned long arg) {
+  61               		.loc 1 66 0
+  62               		.cfi_startproc
+  63               	.LVL1:
+  64 0018 FF92      		push r15
+  65               	.LCFI0:
+  66               		.cfi_def_cfa_offset 3
+  67               		.cfi_offset 15, -2
+  68 001a 0F93      		push r16
+  69               	.LCFI1:
+  70               		.cfi_def_cfa_offset 4
+  71               		.cfi_offset 16, -3
+  72 001c 1F93      		push r17
+  73               	.LCFI2:
+  74               		.cfi_def_cfa_offset 5
+  75               		.cfi_offset 17, -4
+  76 001e CF93      		push r28
+  77               	.LCFI3:
+  78               		.cfi_def_cfa_offset 6
+  79               		.cfi_offset 28, -5
+  80 0020 DF93      		push r29
+  81               	.LCFI4:
+  82               		.cfi_def_cfa_offset 7
+  83               		.cfi_offset 29, -6
+  84 0022 00D0      		rcall .
+  85 0024 00D0      		rcall .
+  86               	.LCFI5:
+  87               		.cfi_def_cfa_offset 11
+  88 0026 CDB7      		in r28,__SP_L__
+  89 0028 DEB7      		in r29,__SP_H__
+  90               	.LCFI6:
+  91               		.cfi_def_cfa_register 28
+  92               	/* prologue: function */
+  93               	/* frame size = 4 */
+  94               	/* stack size = 9 */
+  95               	.L__stack_usage = 9
+  96 002a 182F      		mov r17,r24
+  97 002c 4983      		std Y+1,r20
+  98 002e 5A83      		std Y+2,r21
+  99 0030 6B83      		std Y+3,r22
+ 100 0032 7C83      		std Y+4,r23
+  67:sd.c          ****   uint8_t response, retry;
+  68:sd.c          ****                   
+  69:sd.c          ****   /* Размещение этого кода тут -4 команды, хотя вроде лиш�
+  70:sd.c          ****   if(sd_sdhc == 0 && (cmd==READ_SINGLE_BLOCK || cmd==WRITE_SINGLE_BLOCK))  
+ 101               		.loc 1 70 0
+ 102 0034 8091 0000 		lds r24,sd_sdhc
+ 103               	.LVL2:
+ 104 0038 8111      		cpse r24,__zero_reg__
+ 105 003a 00C0      		rjmp .L9
+ 106               		.loc 1 70 0 is_stmt 0 discriminator 1
+ 107 003c 1135      		cpi r17,lo8(81)
+ 108 003e 01F0      		breq .L10
+ 109 0040 1835      		cpi r17,lo8(88)
+ 110 0042 01F4      		brne .L9
+ 111               	.L10:
+  71:sd.c          ****     arg <<= 9;
+ 112               		.loc 1 71 0 is_stmt 1
+ 113 0044 4981      		ldd r20,Y+1
+ 114 0046 5A81      		ldd r21,Y+2
+ 115 0048 6B81      		ldd r22,Y+3
+ 116 004a 7C81      		ldd r23,Y+4
+ 117               	.LVL3:
+ 118 004c 89E0      		ldi r24,9
+ 119               		1:
+ 120 004e 440F      		lsl r20
+ 121 0050 551F      		rol r21
+ 122 0052 661F      		rol r22
+ 123 0054 771F      		rol r23
+ 124 0056 8A95      		dec r24
+ 125 0058 01F4      		brne 1b
+ 126 005a 4983      		std Y+1,r20
+ 127 005c 5A83      		std Y+2,r21
+ 128 005e 6B83      		std Y+3,r22
+ 129 0060 7C83      		std Y+4,r23
+ 130               	.LVL4:
+ 131               	.L9:
+  72:sd.c          ****   
+  73:sd.c          ****   /* Выбираем карту */
+  74:sd.c          ****   SD_CS_ENABLE
+ 132               		.loc 1 74 0
+ 133 0062 2A98      		cbi 0x5,2
+  75:sd.c          **** 
+  76:sd.c          ****   /* Заголовок команды */
+  77:sd.c          ****   spi_transmit(cmd);
+ 134               		.loc 1 77 0
+ 135 0064 812F      		mov r24,r17
+ 136 0066 0E94 0000 		call spi_transmit
+ 137               	.LVL5:
+  78:sd.c          ****   spi_transmit(((uint8_t*)&arg)[3]);
+ 138               		.loc 1 78 0
+ 139 006a 8C81      		ldd r24,Y+4
+ 140 006c 0E94 0000 		call spi_transmit
+ 141               	.LVL6:
+  79:sd.c          ****   spi_transmit(((uint8_t*)&arg)[2]);
+ 142               		.loc 1 79 0
+ 143 0070 8B81      		ldd r24,Y+3
+ 144 0072 0E94 0000 		call spi_transmit
+ 145               	.LVL7:
+  80:sd.c          ****   spi_transmit(((uint8_t*)&arg)[1]);
+ 146               		.loc 1 80 0
+ 147 0076 8A81      		ldd r24,Y+2
+ 148 0078 0E94 0000 		call spi_transmit
+ 149               	.LVL8:
+  81:sd.c          ****   spi_transmit(((uint8_t*)&arg)[0]);
+ 150               		.loc 1 81 0
+ 151 007c 8981      		ldd r24,Y+1
+ 152 007e 0E94 0000 		call spi_transmit
+ 153               	.LVL9:
+  82:sd.c          **** 
+  83:sd.c          ****   /* Пару каоманд требуют CRC. Остальные же команды игнор�
+  84:sd.c          ****   spi_transmit(cmd == SEND_IF_COND ? 0x87 : 0x95);
+ 154               		.loc 1 84 0
+ 155 0082 1834      		cpi r17,lo8(72)
+ 156 0084 01F4      		brne .L15
+ 157 0086 87E8      		ldi r24,lo8(-121)
+ 158 0088 00C0      		rjmp .L11
+ 159               	.L15:
+ 160 008a 85E9      		ldi r24,lo8(-107)
+ 161               	.L11:
+ 162               		.loc 1 84 0 is_stmt 0 discriminator 3
+ 163 008c 0E94 0000 		call spi_transmit
+ 164               	.LVL10:
+  85:sd.c          **** 
+  86:sd.c          ****   /* Ждем подтвреждение (256 тактов) */  
+  87:sd.c          ****   retry = 0;
+  88:sd.c          ****   while((response = spi_receive()) == 0xFF) 
+ 165               		.loc 1 88 0 is_stmt 1 discriminator 3
+ 166 0090 F12C      		mov r15,__zero_reg__
+ 167               	.LVL11:
+ 168               	.L12:
+ 169               		.loc 1 88 0 is_stmt 0 discriminator 1
+ 170 0092 0E94 0000 		call spi_receive
+ 171               	.LVL12:
+ 172 0096 082F      		mov r16,r24
+ 173               	.LVL13:
+ 174 0098 8F3F      		cpi r24,lo8(-1)
+ 175 009a 01F4      		brne .L23
+ 176               	.LVL14:
+ 177 009c FA94      		dec r15
+ 178               	.LVL15:
+  89:sd.c          ****     if(++retry == 0) break;
+ 179               		.loc 1 89 0 is_stmt 1
+ 180 009e 01F4      		brne .L12
+ 181 00a0 00C0      		rjmp .L13
+ 182               	.L23:
+  90:sd.c          **** 
+  91:sd.c          ****   /* Результат команды READ_OCR обрабатываем тут, так как в �
+  92:sd.c          ****   if(response == 0 && cmd == READ_OCR) {  
+ 183               		.loc 1 92 0
+ 184 00a2 8111      		cpse r24,__zero_reg__
+ 185 00a4 00C0      		rjmp .L13
+ 186               		.loc 1 92 0 is_stmt 0 discriminator 1
+ 187 00a6 1A37      		cpi r17,lo8(122)
+ 188 00a8 01F4      		brne .L13
+  93:sd.c          ****     /* 32 бита из которых нас интересует один бит */
+  94:sd.c          ****     sd_sdhc = spi_receive() & 0x40;
+ 189               		.loc 1 94 0 is_stmt 1
+ 190 00aa 0E94 0000 		call spi_receive
+ 191               	.LVL16:
+ 192 00ae 8074      		andi r24,lo8(64)
+ 193 00b0 8093 0000 		sts sd_sdhc,r24
+  95:sd.c          ****     spi_receive();
+ 194               		.loc 1 95 0
+ 195 00b4 0E94 0000 		call spi_receive
+ 196               	.LVL17:
+  96:sd.c          ****     spi_receive();
+ 197               		.loc 1 96 0
+ 198 00b8 0E94 0000 		call spi_receive
+ 199               	.LVL18:
+  97:sd.c          ****     spi_receive(); 
+ 200               		.loc 1 97 0
+ 201 00bc 0E94 0000 		call spi_receive
+ 202               	.LVL19:
+ 203               	.L13:
+  98:sd.c          ****   }
+  99:sd.c          **** 
+ 100:sd.c          ****   /* отпускаем CS и пауза в 1 байт*/
+ 101:sd.c          ****   SD_CS_DISABLE
+ 204               		.loc 1 101 0
+ 205 00c0 2A9A      		sbi 0x5,2
+ 102:sd.c          ****   spi_receive(); 
+ 206               		.loc 1 102 0
+ 207 00c2 0E94 0000 		call spi_receive
+ 208               	.LVL20:
+ 103:sd.c          **** 
+ 104:sd.c          ****   return response;
+ 105:sd.c          **** }
+ 209               		.loc 1 105 0
+ 210 00c6 802F      		mov r24,r16
+ 211               	/* epilogue start */
+ 212 00c8 0F90      		pop __tmp_reg__
+ 213 00ca 0F90      		pop __tmp_reg__
+ 214 00cc 0F90      		pop __tmp_reg__
+ 215 00ce 0F90      		pop __tmp_reg__
+ 216 00d0 DF91      		pop r29
+ 217 00d2 CF91      		pop r28
+ 218 00d4 1F91      		pop r17
+ 219               	.LVL21:
+ 220 00d6 0F91      		pop r16
+ 221               	.LVL22:
+ 222 00d8 FF90      		pop r15
+ 223 00da 0895      		ret
+ 224               		.cfi_endproc
+ 225               	.LFE8:
+ 227               	.global	sd_check
+ 229               	sd_check:
+ 230               	.LFB9:
+ 106:sd.c          **** 
+ 107:sd.c          **** /**************************************************************************
+ 108:sd.c          **** *  Проверка готовности/наличия карты                                 
+ 109:sd.c          **** **************************************************************************/
+ 110:sd.c          **** 
+ 111:sd.c          **** uint8_t sd_check(void) {
+ 231               		.loc 1 111 0
+ 232               		.cfi_startproc
+ 233 00dc CF93      		push r28
+ 234               	.LCFI7:
+ 235               		.cfi_def_cfa_offset 3
+ 236               		.cfi_offset 28, -2
+ 237               	/* prologue: function */
+ 238               	/* frame size = 0 */
+ 239               	/* stack size = 1 */
+ 240               	.L__stack_usage = 1
+ 241               	.LVL23:
+ 112:sd.c          ****   uint8_t i = 0;
+ 242               		.loc 1 112 0
+ 243 00de C0E0      		ldi r28,0
+ 244               	.LVL24:
+ 245               	.L26:
+ 113:sd.c          ****   do { 
+ 114:sd.c          ****     sd_sendCommand(APP_CMD, 0);
+ 246               		.loc 1 114 0
+ 247 00e0 40E0      		ldi r20,0
+ 248 00e2 50E0      		ldi r21,0
+ 249 00e4 BA01      		movw r22,r20
+ 250 00e6 87E7      		ldi r24,lo8(119)
+ 251 00e8 0E94 0000 		call sd_sendCommand
+ 252               	.LVL25:
+ 115:sd.c          ****     if(sd_sendCommand(SD_SEND_OP_COND, 0x40000000) == 0) return 0;
+ 253               		.loc 1 115 0
+ 254 00ec 40E0      		ldi r20,0
+ 255 00ee 50E0      		ldi r21,0
+ 256 00f0 60E0      		ldi r22,0
+ 257 00f2 70E4      		ldi r23,lo8(64)
+ 258 00f4 89E6      		ldi r24,lo8(105)
+ 259 00f6 0E94 0000 		call sd_sendCommand
+ 260               	.LVL26:
+ 261 00fa 8823      		tst r24
+ 262 00fc 01F0      		breq .L27
+ 116:sd.c          ****   } while(--i);
+ 263               		.loc 1 116 0
+ 264 00fe C150      		subi r28,lo8(-(-1))
+ 265               	.LVL27:
+ 266 0100 01F4      		brne .L26
+ 117:sd.c          ****   return 1;
+ 267               		.loc 1 117 0
+ 268 0102 81E0      		ldi r24,lo8(1)
+ 269 0104 00C0      		rjmp .L25
+ 270               	.L27:
+ 115:sd.c          ****     if(sd_sendCommand(SD_SEND_OP_COND, 0x40000000) == 0) return 0;
+ 271               		.loc 1 115 0
+ 272 0106 80E0      		ldi r24,0
+ 273               	.L25:
+ 274               	/* epilogue start */
+ 118:sd.c          **** }
+ 275               		.loc 1 118 0
+ 276 0108 CF91      		pop r28
+ 277               	.LVL28:
+ 278 010a 0895      		ret
+ 279               		.cfi_endproc
+ 280               	.LFE9:
+ 282               	.global	sd_init
+ 284               	sd_init:
+ 285               	.LFB11:
+ 119:sd.c          **** 
+ 120:sd.c          **** /**************************************************************************
+ 121:sd.c          **** *  Инициализация карты (эта функция вызывается функцие
+ 122:sd.c          **** **************************************************************************/
+ 123:sd.c          **** 
+ 124:sd.c          **** static uint8_t sd_init_int(void) {
+ 125:sd.c          ****   uint8_t i;
+ 126:sd.c          **** 
+ 127:sd.c          ****   /* Сбрасываем SDHC флаг */
+ 128:sd.c          ****   sd_sdhc = 0;
+ 129:sd.c          **** 
+ 130:sd.c          ****   /* Минимум 80 пустых тактов */
+ 131:sd.c          ****   for(i=10; i; --i)
+ 132:sd.c          ****     spi_receive();   
+ 133:sd.c          **** 
+ 134:sd.c          ****   /* CMD0 Посылаем команду сброса */
+ 135:sd.c          ****   if(sd_sendCommand(GO_IDLE_STATE, 0) != 1) goto abort;
+ 136:sd.c          **** 
+ 137:sd.c          ****   /* CMD8 Узнаем версию карты */
+ 138:sd.c          ****   i = 0;
+ 139:sd.c          ****   if(sd_sendCommand(SEND_IF_COND, 0x000001AA)) 
+ 140:sd.c          ****     i = 1;
+ 141:sd.c          **** 
+ 142:sd.c          ****   /* CMD41 Ожидание окончания инициализации */
+ 143:sd.c          ****   if(sd_check()) goto abort;
+ 144:sd.c          **** 
+ 145:sd.c          ****   /* Только для второй версии карты */
+ 146:sd.c          ****   if(i) {
+ 147:sd.c          ****     /* CMD58 определение SDHC карты. Ответ обрабатывается в ф�
+ 148:sd.c          ****     if(sd_sendCommand(READ_OCR, 0) != 0) goto abort;
+ 149:sd.c          ****   }
+ 150:sd.c          ****   
+ 151:sd.c          ****   return 0;    
+ 152:sd.c          **** abort:
+ 153:sd.c          ****   return 1;
+ 154:sd.c          **** }                            
+ 155:sd.c          **** 
+ 156:sd.c          **** /**************************************************************************
+ 157:sd.c          **** *  Инициализация карты                                                    *
+ 158:sd.c          **** **************************************************************************/
+ 159:sd.c          **** 
+ 160:sd.c          **** uint8_t sd_init(void) {
+ 286               		.loc 1 160 0
+ 287               		.cfi_startproc
+ 288 010c 1F93      		push r17
+ 289               	.LCFI8:
+ 290               		.cfi_def_cfa_offset 3
+ 291               		.cfi_offset 17, -2
+ 292 010e CF93      		push r28
+ 293               	.LCFI9:
+ 294               		.cfi_def_cfa_offset 4
+ 295               		.cfi_offset 28, -3
+ 296 0110 DF93      		push r29
+ 297               	.LCFI10:
+ 298               		.cfi_def_cfa_offset 5
+ 299               		.cfi_offset 29, -4
+ 300               	/* prologue: function */
+ 301               	/* frame size = 0 */
+ 302               	/* stack size = 3 */
+ 303               	.L__stack_usage = 3
+ 161:sd.c          ****   uint8_t tries;
+ 162:sd.c          **** 
+ 163:sd.c          ****   /* Освобождаем CS на всякий случай */
+ 164:sd.c          ****   SD_CS_DISABLE
+ 304               		.loc 1 164 0
+ 305 0112 2A9A      		sbi 0x5,2
+ 165:sd.c          **** 
+ 166:sd.c          ****   /* Включаем SPI */
+ 167:sd.c          ****   SPI_INIT
+ 306               		.loc 1 167 0
+ 307 0114 82E5      		ldi r24,lo8(82)
+ 308 0116 8CBD      		out 0x2c,r24
+ 309 0118 1DBC      		out 0x2d,__zero_reg__
+ 310               	.LVL29:
+ 168:sd.c          **** 
+ 169:sd.c          ****   /* Делаем несколько попыток инициализации */
+ 170:sd.c          ****   tries = 10;  
+ 171:sd.c          ****   while(sd_init_int()) 
+ 311               		.loc 1 171 0
+ 312 011a DAE0      		ldi r29,lo8(10)
+ 313               	.LVL30:
+ 314               	.L30:
+ 315               	.LBB8:
+ 316               	.LBB9:
+ 128:sd.c          ****   sd_sdhc = 0;
+ 317               		.loc 1 128 0 discriminator 1
+ 318 011c 1092 0000 		sts sd_sdhc,__zero_reg__
+ 319               	.LVL31:
+ 320 0120 CAE0      		ldi r28,lo8(10)
+ 321               	.LVL32:
+ 322               	.L33:
+ 132:sd.c          ****     spi_receive();   
+ 323               		.loc 1 132 0
+ 324 0122 0E94 0000 		call spi_receive
+ 325               	.LVL33:
+ 326 0126 C150      		subi r28,lo8(-(-1))
+ 327               	.LVL34:
+ 131:sd.c          ****   for(i=10; i; --i)
+ 328               		.loc 1 131 0
+ 329 0128 01F4      		brne .L33
+ 135:sd.c          ****   if(sd_sendCommand(GO_IDLE_STATE, 0) != 1) goto abort;
+ 330               		.loc 1 135 0
+ 331 012a 40E0      		ldi r20,0
+ 332 012c 50E0      		ldi r21,0
+ 333 012e BA01      		movw r22,r20
+ 334 0130 80E4      		ldi r24,lo8(64)
+ 335 0132 0E94 0000 		call sd_sendCommand
+ 336               	.LVL35:
+ 337 0136 8130      		cpi r24,lo8(1)
+ 338 0138 01F4      		brne .L34
+ 339               	.LVL36:
+ 139:sd.c          ****   if(sd_sendCommand(SEND_IF_COND, 0x000001AA)) 
+ 340               		.loc 1 139 0
+ 341 013a 4AEA      		ldi r20,lo8(-86)
+ 342 013c 51E0      		ldi r21,lo8(1)
+ 343 013e 60E0      		ldi r22,0
+ 344 0140 70E0      		ldi r23,0
+ 345 0142 88E4      		ldi r24,lo8(72)
+ 346 0144 0E94 0000 		call sd_sendCommand
+ 347               	.LVL37:
+ 348 0148 182F      		mov r17,r24
+ 349               	.LVL38:
+ 143:sd.c          ****   if(sd_check()) goto abort;
+ 350               		.loc 1 143 0
+ 351 014a 0E94 0000 		call sd_check
+ 352               	.LVL39:
+ 353 014e 8111      		cpse r24,__zero_reg__
+ 354 0150 00C0      		rjmp .L34
+ 146:sd.c          ****   if(i) {
+ 355               		.loc 1 146 0
+ 356 0152 1123      		tst r17
+ 357 0154 01F0      		breq .L35
+ 148:sd.c          ****     if(sd_sendCommand(READ_OCR, 0) != 0) goto abort;
+ 358               		.loc 1 148 0
+ 359 0156 40E0      		ldi r20,0
+ 360 0158 50E0      		ldi r21,0
+ 361 015a BA01      		movw r22,r20
+ 362 015c 8AE7      		ldi r24,lo8(122)
+ 363 015e 0E94 0000 		call sd_sendCommand
+ 364               	.LVL40:
+ 365 0162 8111      		cpse r24,__zero_reg__
+ 366 0164 00C0      		rjmp .L34
+ 367               	.L35:
+ 368               	.LBE9:
+ 369               	.LBE8:
+ 172:sd.c          ****     if(--tries == 0) {
+ 173:sd.c          ****       lastError = ERR_DISK_ERR;
+ 174:sd.c          ****       return 1;       
+ 175:sd.c          ****     }
+ 176:sd.c          ****           
+ 177:sd.c          ****   /* Вклчюаем максимальную скорость */
+ 178:sd.c          ****   SPI_HIGHSPEED     
+ 370               		.loc 1 178 0
+ 371 0166 80E5      		ldi r24,lo8(80)
+ 372 0168 8CBD      		out 0x2c,r24
+ 373 016a 8DB5      		in r24,0x2d
+ 374 016c 8160      		ori r24,lo8(1)
+ 375 016e 8DBD      		out 0x2d,r24
+ 376               	.LVL41:
+ 377               	.LBB10:
+ 378               	.LBB11:
+ 379               		.file 2 "/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h"
+   1:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+   6:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+   9:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  12:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      distribution.
+  16:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  17:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  21:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  33:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  35:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  38:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  41:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  42:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  46:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /** \file */
+  47:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \code
+  49:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \endcode
+  53:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  54:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     used.
+  58:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  59:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  68:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  77:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  81:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** */
+  82:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  83:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  87:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  88:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  93:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  94:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+  97:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+  98:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #endif
+ 103:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 104:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** /**
+ 105:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 107:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 109:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 112:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 114:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 120:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 125:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 129:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 132:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 140:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****  */
+ 141:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** void
+ 142:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** {
+ 144:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 152:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 155:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 158:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#else
+ 159:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	#endif
+ 162:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 
+ 163:/usr/local/CrossPack-AVR-20131216/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 380               		.loc 2 163 0
+ 381 0170 8FEC      		ldi r24,lo8(1999)
+ 382 0172 97E0      		ldi r25,hi8(1999)
+ 383 0174 0197      		1: sbiw r24,1
+ 384 0176 01F4      		brne 1b
+ 385 0178 00C0      		rjmp .
+ 386 017a 0000      		nop
+ 387               	.LBE11:
+ 388               	.LBE10:
+ 179:sd.c          ****   
+ 180:sd.c          ****   return 0;
+ 389               		.loc 1 180 0
+ 390 017c 00C0      		rjmp .L41
+ 391               	.LVL42:
+ 392               	.L34:
+ 393 017e D150      		subi r29,lo8(-(-1))
+ 394               	.LVL43:
+ 172:sd.c          ****     if(--tries == 0) {
+ 395               		.loc 1 172 0
+ 396 0180 01F4      		brne .L30
+ 173:sd.c          ****       lastError = ERR_DISK_ERR;
+ 397               		.loc 1 173 0
+ 398 0182 82E0      		ldi r24,lo8(2)
+ 399 0184 8093 0000 		sts lastError,r24
+ 174:sd.c          ****       return 1;       
+ 400               		.loc 1 174 0
+ 401 0188 C1E0      		ldi r28,lo8(1)
+ 402               	.L41:
+ 181:sd.c          **** }
+ 403               		.loc 1 181 0
+ 404 018a 8C2F      		mov r24,r28
+ 405               	/* epilogue start */
+ 406 018c DF91      		pop r29
+ 407               	.LVL44:
+ 408 018e CF91      		pop r28
+ 409 0190 1F91      		pop r17
+ 410 0192 0895      		ret
+ 411               		.cfi_endproc
+ 412               	.LFE11:
+ 414               	.global	sd_read
+ 416               	sd_read:
+ 417               	.LFB13:
+ 182:sd.c          **** 
+ 183:sd.c          **** /**************************************************************************
+ 184:sd.c          **** *  Ожидание определенного байта на шине                            
+ 185:sd.c          **** **************************************************************************/
+ 186:sd.c          **** 
+ 187:sd.c          **** static uint8_t sd_waitBus(uint8_t byte) {
+ 188:sd.c          ****   WORD retry = 0;
+ 189:sd.c          ****   do {
+ 190:sd.c          ****     if(spi_receive() == byte) return 0;
+ 191:sd.c          ****   } while(++retry); 
+ 192:sd.c          ****   return 1;
+ 193:sd.c          **** }
+ 194:sd.c          **** 
+ 195:sd.c          **** /**************************************************************************
+ 196:sd.c          **** *  Чтение произвольного участка сектора                           
+ 197:sd.c          **** **************************************************************************/
+ 198:sd.c          **** 
+ 199:sd.c          **** uint8_t sd_read(uint8_t* buffer, unsigned long sector, WORD offsetInSector, WORD length) {
+ 418               		.loc 1 199 0
+ 419               		.cfi_startproc
+ 420               	.LVL45:
+ 421 0194 CF92      		push r12
+ 422               	.LCFI11:
+ 423               		.cfi_def_cfa_offset 3
+ 424               		.cfi_offset 12, -2
+ 425 0196 DF92      		push r13
+ 426               	.LCFI12:
+ 427               		.cfi_def_cfa_offset 4
+ 428               		.cfi_offset 13, -3
+ 429 0198 EF92      		push r14
+ 430               	.LCFI13:
+ 431               		.cfi_def_cfa_offset 5
+ 432               		.cfi_offset 14, -4
+ 433 019a FF92      		push r15
+ 434               	.LCFI14:
+ 435               		.cfi_def_cfa_offset 6
+ 436               		.cfi_offset 15, -5
+ 437 019c 0F93      		push r16
+ 438               	.LCFI15:
+ 439               		.cfi_def_cfa_offset 7
+ 440               		.cfi_offset 16, -6
+ 441 019e 1F93      		push r17
+ 442               	.LCFI16:
+ 443               		.cfi_def_cfa_offset 8
+ 444               		.cfi_offset 17, -7
+ 445 01a0 CF93      		push r28
+ 446               	.LCFI17:
+ 447               		.cfi_def_cfa_offset 9
+ 448               		.cfi_offset 28, -8
+ 449 01a2 DF93      		push r29
+ 450               	.LCFI18:
+ 451               		.cfi_def_cfa_offset 10
+ 452               		.cfi_offset 29, -9
+ 453               	/* prologue: function */
+ 454               	/* frame size = 0 */
+ 455               	/* stack size = 8 */
+ 456               	.L__stack_usage = 8
+ 457 01a4 EC01      		movw r28,r24
+ 458 01a6 7901      		movw r14,r18
+ 200:sd.c          ****   uint8_t b;
+ 201:sd.c          ****   WORD i;
+ 202:sd.c          ****     
+ 203:sd.c          ****   /* Посылаем команду */
+ 204:sd.c          ****   if(sd_sendCommand(READ_SINGLE_BLOCK, sector)) goto abort;
+ 459               		.loc 1 204 0
+ 460 01a8 81E5      		ldi r24,lo8(81)
+ 461               	.LVL46:
+ 462 01aa 0E94 0000 		call sd_sendCommand
+ 463               	.LVL47:
+ 464 01ae 8111      		cpse r24,__zero_reg__
+ 465 01b0 00C0      		rjmp .L43
+ 205:sd.c          **** 
+ 206:sd.c          ****   /* Сразу же возращаем CS, что бы принять ответ команды */
+ 207:sd.c          ****   SD_CS_ENABLE
+ 466               		.loc 1 207 0
+ 467 01b2 2A98      		cbi 0x5,2
+ 468               	.LVL48:
+ 469 01b4 C12C      		mov r12,__zero_reg__
+ 470 01b6 D12C      		mov r13,__zero_reg__
+ 471               	.LVL49:
+ 472               	.L45:
+ 473               	.LBB14:
+ 474               	.LBB15:
+ 190:sd.c          ****     if(spi_receive() == byte) return 0;
+ 475               		.loc 1 190 0
+ 476 01b8 0E94 0000 		call spi_receive
+ 477               	.LVL50:
+ 478 01bc 8E3F      		cpi r24,lo8(-2)
+ 479 01be 01F0      		breq .L44
+ 480               	.LVL51:
+ 481 01c0 81E0      		ldi r24,1
+ 482 01c2 C81A      		sub r12,r24
+ 483 01c4 D108      		sbc r13,__zero_reg__
+ 484               	.LVL52:
+ 191:sd.c          ****   } while(++retry); 
+ 485               		.loc 1 191 0
+ 486 01c6 C114      		cp r12,__zero_reg__
+ 487 01c8 D104      		cpc r13,__zero_reg__
+ 488 01ca 01F4      		brne .L45
+ 489 01cc 00C0      		rjmp .L43
+ 490               	.L44:
+ 190:sd.c          ****     if(spi_receive() == byte) return 0;
+ 491               		.loc 1 190 0
+ 492 01ce C12C      		mov r12,__zero_reg__
+ 493 01d0 92E0      		ldi r25,lo8(2)
+ 494 01d2 D92E      		mov r13,r25
+ 495               	.LVL53:
+ 496               	.L49:
+ 497               	.LBE15:
+ 498               	.LBE14:
+ 208:sd.c          **** 
+ 209:sd.c          ****   /* Ждем стартовый байт */
+ 210:sd.c          ****   if(sd_waitBus(0xFE)) goto abort;
+ 211:sd.c          **** 
+ 212:sd.c          ****   /* Принимаем 512 байт */
+ 213:sd.c          ****   for(i=512; i; --i) {
+ 214:sd.c          ****     b = spi_receive();
+ 499               		.loc 1 214 0
+ 500 01d4 0E94 0000 		call spi_receive
+ 501               	.LVL54:
+ 215:sd.c          ****     if(offsetInSector) { offsetInSector--; continue; }
+ 502               		.loc 1 215 0
+ 503 01d8 E114      		cp r14,__zero_reg__
+ 504 01da F104      		cpc r15,__zero_reg__
+ 505 01dc 01F0      		breq .L46
+ 506               		.loc 1 215 0 is_stmt 0 discriminator 1
+ 507 01de 81E0      		ldi r24,1
+ 508 01e0 E81A      		sub r14,r24
+ 509 01e2 F108      		sbc r15,__zero_reg__
+ 510               	.LVL55:
+ 511 01e4 00C0      		rjmp .L47
+ 512               	.LVL56:
+ 513               	.L46:
+ 216:sd.c          ****     if(length == 0) continue;
+ 514               		.loc 1 216 0 is_stmt 1
+ 515 01e6 0115      		cp r16,__zero_reg__
+ 516 01e8 1105      		cpc r17,__zero_reg__
+ 517 01ea 01F0      		breq .L47
+ 217:sd.c          ****     length--;
+ 518               		.loc 1 217 0
+ 519 01ec 0150      		subi r16,1
+ 520 01ee 1109      		sbc r17,__zero_reg__
+ 521               	.LVL57:
+ 218:sd.c          ****     *buffer++ = b;
+ 522               		.loc 1 218 0
+ 523 01f0 8883      		st Y,r24
+ 524 01f2 2196      		adiw r28,1
+ 525               	.LVL58:
+ 526               	.L47:
+ 527 01f4 81E0      		ldi r24,1
+ 528 01f6 C81A      		sub r12,r24
+ 529 01f8 D108      		sbc r13,__zero_reg__
+ 530               	.LVL59:
+ 213:sd.c          ****   for(i=512; i; --i) {
+ 531               		.loc 1 213 0
+ 532 01fa C114      		cp r12,__zero_reg__
+ 533 01fc D104      		cpc r13,__zero_reg__
+ 534 01fe 01F4      		brne .L49
+ 219:sd.c          ****   }
+ 220:sd.c          **** 
+ 221:sd.c          ****   /* CRC игнорируем */
+ 222:sd.c          ****   spi_receive();
+ 535               		.loc 1 222 0
+ 536 0200 0E94 0000 		call spi_receive
+ 537               	.LVL60:
+ 223:sd.c          ****   spi_receive();
+ 538               		.loc 1 223 0
+ 539 0204 0E94 0000 		call spi_receive
+ 540               	.LVL61:
+ 224:sd.c          **** 
+ 225:sd.c          ****   /* отпускаем CS и пауза в 1 байт*/
+ 226:sd.c          ****   SD_CS_DISABLE
+ 541               		.loc 1 226 0
+ 542 0208 2A9A      		sbi 0x5,2
+ 227:sd.c          ****   spi_receive(); 
+ 543               		.loc 1 227 0
+ 544 020a 0E94 0000 		call spi_receive
+ 545               	.LVL62:
+ 228:sd.c          **** 
+ 229:sd.c          ****   /* Ок */
+ 230:sd.c          ****   return 0;
+ 546               		.loc 1 230 0
+ 547 020e 80E0      		ldi r24,0
+ 548 0210 00C0      		rjmp .L50
+ 549               	.LVL63:
+ 550               	.L43:
+ 551               	.LDL1:
+ 231:sd.c          **** 
+ 232:sd.c          ****   /* Ошибка и отпускаем CS.*/
+ 233:sd.c          **** abort:
+ 234:sd.c          ****   SD_CS_DISABLE
+ 552               		.loc 1 234 0
+ 553 0212 2A9A      		sbi 0x5,2
+ 235:sd.c          ****   lastError = ERR_DISK_ERR;
+ 554               		.loc 1 235 0
+ 555 0214 82E0      		ldi r24,lo8(2)
+ 556 0216 8093 0000 		sts lastError,r24
+ 236:sd.c          ****   return 1;
+ 557               		.loc 1 236 0
+ 558 021a 81E0      		ldi r24,lo8(1)
+ 559               	.L50:
+ 560               	/* epilogue start */
+ 237:sd.c          **** }
+ 561               		.loc 1 237 0
+ 562 021c DF91      		pop r29
+ 563 021e CF91      		pop r28
+ 564               	.LVL64:
+ 565 0220 1F91      		pop r17
+ 566 0222 0F91      		pop r16
+ 567               	.LVL65:
+ 568 0224 FF90      		pop r15
+ 569 0226 EF90      		pop r14
+ 570               	.LVL66:
+ 571 0228 DF90      		pop r13
+ 572 022a CF90      		pop r12
+ 573 022c 0895      		ret
+ 574               		.cfi_endproc
+ 575               	.LFE13:
+ 577               	.global	sd_write512
+ 579               	sd_write512:
+ 580               	.LFB14:
+ 238:sd.c          **** 
+ 239:sd.c          **** /**************************************************************************
+ 240:sd.c          **** *  Запись сектора (512 байт)                                              *
+ 241:sd.c          **** **************************************************************************/
+ 242:sd.c          **** 
+ 243:sd.c          **** uint8_t sd_write512(uint8_t* buffer, unsigned long sector) {
+ 581               		.loc 1 243 0
+ 582               		.cfi_startproc
+ 583               	.LVL67:
+ 584 022e 0F93      		push r16
+ 585               	.LCFI19:
+ 586               		.cfi_def_cfa_offset 3
+ 587               		.cfi_offset 16, -2
+ 588 0230 1F93      		push r17
+ 589               	.LCFI20:
+ 590               		.cfi_def_cfa_offset 4
+ 591               		.cfi_offset 17, -3
+ 592 0232 CF93      		push r28
+ 593               	.LCFI21:
+ 594               		.cfi_def_cfa_offset 5
+ 595               		.cfi_offset 28, -4
+ 596 0234 DF93      		push r29
+ 597               	.LCFI22:
+ 598               		.cfi_def_cfa_offset 6
+ 599               		.cfi_offset 29, -5
+ 600               	/* prologue: function */
+ 601               	/* frame size = 0 */
+ 602               	/* stack size = 4 */
+ 603               	.L__stack_usage = 4
+ 604 0236 182F      		mov r17,r24
+ 605 0238 092F      		mov r16,r25
+ 244:sd.c          ****   WORD n;
+ 245:sd.c          ****   
+ 246:sd.c          ****   /* Посылаем команду */
+ 247:sd.c          ****   if(sd_sendCommand(WRITE_SINGLE_BLOCK, sector)) goto abort;
+ 606               		.loc 1 247 0
+ 607 023a 88E5      		ldi r24,lo8(88)
+ 608               	.LVL68:
+ 609 023c 0E94 0000 		call sd_sendCommand
+ 610               	.LVL69:
+ 611 0240 8823      		tst r24
+ 612 0242 01F0      		breq .L58
+ 613               	.LVL70:
+ 614               	.L62:
+ 615               	.LDL2:
+ 248:sd.c          **** 
+ 249:sd.c          ****   /* Сразу же возращаем CS, что бы отправить блок данных */
+ 250:sd.c          ****   SD_CS_ENABLE
+ 251:sd.c          **** 
+ 252:sd.c          ****   /* Посылаем стартовый байт */
+ 253:sd.c          ****   spi_transmit(0xFE);
+ 254:sd.c          ****   
+ 255:sd.c          ****   /* Данные */
+ 256:sd.c          ****   for(n=512; n; --n)    
+ 257:sd.c          ****     spi_transmit(*buffer++);
+ 258:sd.c          ****       
+ 259:sd.c          ****   /* CRC игнорируется */
+ 260:sd.c          ****   spi_transmit(0xFF);
+ 261:sd.c          ****   spi_transmit(0xFF);
+ 262:sd.c          **** 
+ 263:sd.c          ****   /* Ответ МК */
+ 264:sd.c          ****   if((spi_receive() & 0x1F) != 0x05) goto abort;
+ 265:sd.c          ****                     
+ 266:sd.c          ****   /* Ждем окончания записи, т.е. пока не освободится шина
+ 267:sd.c          ****   if(sd_waitBus(0xFF)) goto abort;
+ 268:sd.c          ****   
+ 269:sd.c          ****   /* отпускаем CS и пауза в 1 байт*/
+ 270:sd.c          ****   SD_CS_DISABLE
+ 271:sd.c          ****   spi_receive();
+ 272:sd.c          **** 
+ 273:sd.c          ****   /* Ок */
+ 274:sd.c          ****   return 0;
+ 275:sd.c          ****               
+ 276:sd.c          ****   /* Ошибка.*/
+ 277:sd.c          **** abort:  
+ 278:sd.c          ****   SD_CS_DISABLE 
+ 616               		.loc 1 278 0
+ 617 0244 2A9A      		sbi 0x5,2
+ 279:sd.c          ****   lastError = ERR_DISK_ERR;
+ 618               		.loc 1 279 0
+ 619 0246 82E0      		ldi r24,lo8(2)
+ 620 0248 8093 0000 		sts lastError,r24
+ 280:sd.c          ****   return 1;
+ 621               		.loc 1 280 0
+ 622 024c 81E0      		ldi r24,lo8(1)
+ 623 024e 00C0      		rjmp .L68
+ 624               	.LVL71:
+ 625               	.L58:
+ 250:sd.c          ****   SD_CS_ENABLE
+ 626               		.loc 1 250 0
+ 627 0250 2A98      		cbi 0x5,2
+ 253:sd.c          ****   spi_transmit(0xFE);
+ 628               		.loc 1 253 0
+ 629 0252 8EEF      		ldi r24,lo8(-2)
+ 630 0254 0E94 0000 		call spi_transmit
+ 631               	.LVL72:
+ 632 0258 C12F      		mov r28,r17
+ 633 025a D02F      		mov r29,r16
+ 634 025c 8E01      		movw r16,r28
+ 635 025e 1E5F      		subi r17,-2
+ 636               	.LVL73:
+ 637               	.L61:
+ 257:sd.c          ****     spi_transmit(*buffer++);
+ 638               		.loc 1 257 0 discriminator 2
+ 639 0260 8991      		ld r24,Y+
+ 640               	.LVL74:
+ 641 0262 0E94 0000 		call spi_transmit
+ 642               	.LVL75:
+ 256:sd.c          ****   for(n=512; n; --n)    
+ 643               		.loc 1 256 0 discriminator 2
+ 644 0266 C017      		cp r28,r16
+ 645 0268 D107      		cpc r29,r17
+ 646 026a 01F4      		brne .L61
+ 260:sd.c          ****   spi_transmit(0xFF);
+ 647               		.loc 1 260 0
+ 648 026c 8FEF      		ldi r24,lo8(-1)
+ 649 026e 0E94 0000 		call spi_transmit
+ 650               	.LVL76:
+ 261:sd.c          ****   spi_transmit(0xFF);
+ 651               		.loc 1 261 0
+ 652 0272 8FEF      		ldi r24,lo8(-1)
+ 653 0274 0E94 0000 		call spi_transmit
+ 654               	.LVL77:
+ 264:sd.c          ****   if((spi_receive() & 0x1F) != 0x05) goto abort;
+ 655               		.loc 1 264 0
+ 656 0278 0E94 0000 		call spi_receive
+ 657               	.LVL78:
+ 658 027c 8F71      		andi r24,lo8(31)
+ 659 027e 8530      		cpi r24,lo8(5)
+ 660 0280 01F4      		brne .L62
+ 661 0282 C0E0      		ldi r28,0
+ 662 0284 D0E0      		ldi r29,0
+ 663               	.LVL79:
+ 664               	.L64:
+ 665               	.LBB18:
+ 666               	.LBB19:
+ 190:sd.c          ****     if(spi_receive() == byte) return 0;
+ 667               		.loc 1 190 0
+ 668 0286 0E94 0000 		call spi_receive
+ 669               	.LVL80:
+ 670 028a 8F3F      		cpi r24,lo8(-1)
+ 671 028c 01F0      		breq .L63
+ 672               	.LVL81:
+ 673 028e 2197      		sbiw r28,1
+ 674               	.LVL82:
+ 191:sd.c          ****   } while(++retry); 
+ 675               		.loc 1 191 0
+ 676 0290 2097      		sbiw r28,0
+ 677 0292 01F4      		brne .L64
+ 678 0294 00C0      		rjmp .L62
+ 679               	.L63:
+ 680               	.LBE19:
+ 681               	.LBE18:
+ 270:sd.c          ****   SD_CS_DISABLE
+ 682               		.loc 1 270 0
+ 683 0296 2A9A      		sbi 0x5,2
+ 271:sd.c          ****   spi_receive();
+ 684               		.loc 1 271 0
+ 685 0298 0E94 0000 		call spi_receive
+ 686               	.LVL83:
+ 274:sd.c          ****   return 0;
+ 687               		.loc 1 274 0
+ 688 029c 80E0      		ldi r24,0
+ 689               	.LVL84:
+ 690               	.L68:
+ 691               	/* epilogue start */
+ 281:sd.c          **** }
+ 692               		.loc 1 281 0
+ 693 029e DF91      		pop r29
+ 694 02a0 CF91      		pop r28
+ 695 02a2 1F91      		pop r17
+ 696 02a4 0F91      		pop r16
+ 697 02a6 0895      		ret
+ 698               		.cfi_endproc
+ 699               	.LFE14:
+ 701               		.comm	sd_sdhc,1,1
+ 702               	.Letext0:
+ 703               		.file 3 "common.h"
+ 704               		.file 4 "/usr/local/CrossPack-AVR-20131216/avr/include/stdint.h"
+ 705               		.file 5 "fs.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 sd.c
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:2      *ABS*:0000003e __SP_H__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:3      *ABS*:0000003d __SP_L__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:4      *ABS*:0000003f __SREG__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:5      *ABS*:00000000 __tmp_reg__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:6      *ABS*:00000001 __zero_reg__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:11     .text:00000000 spi_transmit
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:35     .text:0000000a spi_receive
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:59     .text:00000018 sd_sendCommand
+                            *COM*:00000001 sd_sdhc
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:229    .text:000000dc sd_check
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:284    .text:0000010c sd_init
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:416    .text:00000194 sd_read
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//ccYbGXZ8.s:579    .text:0000022e sd_write512
+
+UNDEFINED SYMBOLS
+lastError
+__do_clear_bss

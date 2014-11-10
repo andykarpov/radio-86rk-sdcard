@@ -1,0 +1,217 @@
+   1               		.file	"proto.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	wait
+  12               	wait:
+  13               	.LFB0:
+  14               		.file 1 "proto.c"
+   1:proto.c       **** // SD Controller for Computer "Radio 86RK" / "Apogee BK01"
+   2:proto.c       **** // (c) 10-05-2014 vinxru (aleksey.f.morozov@gmail.com)
+   3:proto.c       **** 
+   4:proto.c       **** #include <avr/io.h>
+   5:proto.c       **** #include "proto.h"
+   6:proto.c       **** 
+   7:proto.c       **** void wait(void) {
+  15               		.loc 1 7 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  21               	.L3:
+   8:proto.c       ****     // Ждем перепад 0->1
+   9:proto.c       ****     while( !(PINC && (1 << PC5)) );
+  22               		.loc 1 9 0 discriminator 1
+  23 0000 86B1      		in r24,0x6
+  24 0002 8823      		tst r24
+  25 0004 01F0      		breq .L3
+  26               	.L5:
+  10:proto.c       ****     while( PINC && (1 << PC5) ); 
+  27               		.loc 1 10 0
+  28 0006 86B1      		in r24,0x6
+  29 0008 8111      		cpse r24,__zero_reg__
+  30 000a 00C0      		rjmp .L5
+  11:proto.c       **** //    while((PINC&0x3F)==0); 
+  12:proto.c       **** //    while((PINC&0x3F)==0x20);
+  13:proto.c       ****     if((PINC&0x3F)==0) return;
+  31               		.loc 1 13 0
+  32 000c 86B1      		in r24,0x6
+  33 000e 8F73      		andi r24,lo8(63)
+  34 0010 01F0      		breq .L1
+  14:proto.c       ****     asm volatile("RJMP 0");
+  35               		.loc 1 14 0
+  36               	/* #APP */
+  37               	 ;  14 "proto.c" 1
+  38 0012 F6CF      		RJMP 0
+  39               	 ;  0 "" 2
+  40               	/* #NOAPP */
+  41               	.L1:
+  42 0014 0895      		ret
+  43               		.cfi_endproc
+  44               	.LFE0:
+  46               	.global	sendStart
+  48               	sendStart:
+  49               	.LFB1:
+  15:proto.c       **** }
+  16:proto.c       **** 
+  17:proto.c       **** void sendStart(uint8_t c) {
+  50               		.loc 1 17 0
+  51               		.cfi_startproc
+  52               	.LVL0:
+  53 0016 CF93      		push r28
+  54               	.LCFI0:
+  55               		.cfi_def_cfa_offset 3
+  56               		.cfi_offset 28, -2
+  57 0018 DF93      		push r29
+  58               	.LCFI1:
+  59               		.cfi_def_cfa_offset 4
+  60               		.cfi_offset 29, -3
+  61 001a 1F92      		push __zero_reg__
+  62               	.LCFI2:
+  63               		.cfi_def_cfa_offset 5
+  64 001c CDB7      		in r28,__SP_L__
+  65 001e DEB7      		in r29,__SP_H__
+  66               	.LCFI3:
+  67               		.cfi_def_cfa_register 28
+  68               	/* prologue: function */
+  69               	/* frame size = 1 */
+  70               	/* stack size = 3 */
+  71               	.L__stack_usage = 3
+  18:proto.c       ****     wait();
+  72               		.loc 1 18 0
+  73 0020 8983      		std Y+1,r24
+  74 0022 0E94 0000 		call wait
+  75               	.LVL1:
+  19:proto.c       ****     DATA_OUT
+  76               		.loc 1 19 0
+  77 0026 9FEF      		ldi r25,lo8(-1)
+  78 0028 9AB9      		out 0xa,r25
+  20:proto.c       ****     PORTD = c;
+  79               		.loc 1 20 0
+  80 002a 8981      		ldd r24,Y+1
+  81 002c 8BB9      		out 0xb,r24
+  82               	/* epilogue start */
+  21:proto.c       **** }
+  83               		.loc 1 21 0
+  84 002e 0F90      		pop __tmp_reg__
+  85 0030 DF91      		pop r29
+  86 0032 CF91      		pop r28
+  87 0034 0895      		ret
+  88               		.cfi_endproc
+  89               	.LFE1:
+  91               	.global	recvStart
+  93               	recvStart:
+  94               	.LFB2:
+  22:proto.c       **** 
+  23:proto.c       **** void recvStart(void) {
+  95               		.loc 1 23 0
+  96               		.cfi_startproc
+  97               	/* prologue: function */
+  98               	/* frame size = 0 */
+  99               	/* stack size = 0 */
+ 100               	.L__stack_usage = 0
+  24:proto.c       ****     wait();
+ 101               		.loc 1 24 0
+ 102 0036 0E94 0000 		call wait
+ 103               	.LVL2:
+  25:proto.c       ****     DATA_IN
+ 104               		.loc 1 25 0
+ 105 003a 1AB8      		out 0xa,__zero_reg__
+  26:proto.c       ****     PORTD = 0xFF;
+ 106               		.loc 1 26 0
+ 107 003c 8FEF      		ldi r24,lo8(-1)
+ 108 003e 8BB9      		out 0xb,r24
+ 109 0040 0895      		ret
+ 110               		.cfi_endproc
+ 111               	.LFE2:
+ 113               	.global	wrecv
+ 115               	wrecv:
+ 116               	.LFB3:
+  27:proto.c       **** } 
+  28:proto.c       **** 
+  29:proto.c       **** uint8_t wrecv(void) {
+ 117               		.loc 1 29 0
+ 118               		.cfi_startproc
+ 119               	/* prologue: function */
+ 120               	/* frame size = 0 */
+ 121               	/* stack size = 0 */
+ 122               	.L__stack_usage = 0
+  30:proto.c       ****     wait();
+ 123               		.loc 1 30 0
+ 124 0042 0E94 0000 		call wait
+ 125               	.LVL3:
+  31:proto.c       ****     return PIND;
+ 126               		.loc 1 31 0
+ 127 0046 89B1      		in r24,0x9
+  32:proto.c       **** }
+ 128               		.loc 1 32 0
+ 129 0048 0895      		ret
+ 130               		.cfi_endproc
+ 131               	.LFE3:
+ 133               	.global	send
+ 135               	send:
+ 136               	.LFB4:
+  33:proto.c       **** 
+  34:proto.c       **** void send(uint8_t c) {
+ 137               		.loc 1 34 0
+ 138               		.cfi_startproc
+ 139               	.LVL4:
+ 140 004a CF93      		push r28
+ 141               	.LCFI4:
+ 142               		.cfi_def_cfa_offset 3
+ 143               		.cfi_offset 28, -2
+ 144 004c DF93      		push r29
+ 145               	.LCFI5:
+ 146               		.cfi_def_cfa_offset 4
+ 147               		.cfi_offset 29, -3
+ 148 004e 1F92      		push __zero_reg__
+ 149               	.LCFI6:
+ 150               		.cfi_def_cfa_offset 5
+ 151 0050 CDB7      		in r28,__SP_L__
+ 152 0052 DEB7      		in r29,__SP_H__
+ 153               	.LCFI7:
+ 154               		.cfi_def_cfa_register 28
+ 155               	/* prologue: function */
+ 156               	/* frame size = 1 */
+ 157               	/* stack size = 3 */
+ 158               	.L__stack_usage = 3
+  35:proto.c       ****     wait();
+ 159               		.loc 1 35 0
+ 160 0054 8983      		std Y+1,r24
+ 161 0056 0E94 0000 		call wait
+ 162               	.LVL5:
+  36:proto.c       ****     PORTD = c;
+ 163               		.loc 1 36 0
+ 164 005a 8981      		ldd r24,Y+1
+ 165 005c 8BB9      		out 0xb,r24
+ 166               	/* epilogue start */
+  37:proto.c       **** }
+ 167               		.loc 1 37 0
+ 168 005e 0F90      		pop __tmp_reg__
+ 169 0060 DF91      		pop r29
+ 170 0062 CF91      		pop r28
+ 171 0064 0895      		ret
+ 172               		.cfi_endproc
+ 173               	.LFE4:
+ 175               	.Letext0:
+ 176               		.file 2 "/usr/local/CrossPack-AVR-20131216/avr/include/stdint.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 proto.c
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:2      *ABS*:0000003e __SP_H__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:3      *ABS*:0000003d __SP_L__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:4      *ABS*:0000003f __SREG__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:5      *ABS*:00000000 __tmp_reg__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:6      *ABS*:00000001 __zero_reg__
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:12     .text:00000000 wait
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:48     .text:00000016 sendStart
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:93     .text:00000036 recvStart
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:115    .text:00000042 wrecv
+/var/folders/bx/kcf4hmpx0r54kzy3b_2bm54h0000gn/T//cc0wsAMt.s:135    .text:0000004a send
+
+NO UNDEFINED SYMBOLS
