@@ -43,7 +43,7 @@ UsedLibrary="/Users/andy/external_lbrs/TDA8425.lbr"
 [Win_1]
 Type="Schematic Editor"
 Loc="320 218 919 617"
-State=1
+State=0
 Number=1
 File="radio-86rk-SRAM-sdcard.sch"
 View="-5.50062 -4.23062 254.116 189.346"
@@ -84,15 +84,14 @@ SwapLevel=0
 ArcDirection=0
 AddLevel=2
 PadsSameType=0
-Layer=94
-Views=" 1: -5.50062 -4.23062 254.116 189.346"
+Layer=91
 Sheet="1"
 
 [Win_2]
 Type="Board Editor"
-Loc="320 218 919 617"
+Loc="115 85 1279 799"
 State=1
-Number=3
+Number=2
 File="radio-86rk-SRAM-sdcard.brd"
 View="-30.7065 -17.5758 82.3333 51.053"
 WireWidths=" 0 0.254 0.3048 0.6096 0.8128 1.016 1.27 1.4224 1.6764 1.778 1.9304 2.1844 2.54 3.81 6.4516 0.4064"
@@ -136,7 +135,7 @@ Layer=16
 
 [Win_3]
 Type="Control Panel"
-Loc="320 218 919 617"
+Loc="136 124 1095 588"
 State=2
 Number=0
 

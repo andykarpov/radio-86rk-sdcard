@@ -1,7 +1,6 @@
 # Адаптер SD-CARD для Радио-86РК_SRAM
 
 Данный проект является развитием проекта адаптера SD-CARD  от **Vinxru** 
-[http://vinxru.livejournal.com](http://vinxru.livejournal.com), исходный код проекта расположен по адресу [https://github.com/vinxru/86RKSD](https://github.com/vinxru/86RKSD)
 
 
 ## Изменения в схеме и печатной плате
@@ -79,9 +78,3 @@ Gerber-файлы для производства платы проходят в
 - Обсуждение проекта на zx-pk.ru: [http://zx-pk.ru/showthread.php?t=24092](http://zx-pk.ru/showthread.php?t=24092)
 
 - Тема в барахолке на zx-pk.ru: [http://zx-pk.ru/market/viewtopic.php?f=7&t=2567&p=24381](http://zx-pk.ru/market/viewtopic.php?f=7&t=2567&p=24381)
-
-- Оригинальная авторская разработка: [http://vinxru.livejournal.com/235725.html](http://vinxru.livejournal.com/235725.html) 
-
-- Исходный код оригинальной авторской разработки: [http://github.com/vinxru/86RKSD](http://github.com/vinxru/86RKSD)
-
-- Группа автора в соц. сети Вконтакте с подробным описанием этапов разработки: [https://vk.com/retropk](https://vk.com/retropk)
